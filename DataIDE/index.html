@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strat's Datapack IDE</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Google Fonts for Matrix Monospace font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Monaco Editor CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <i data-lucide="terminal" class="matrix-glow-icon"></i>
+        <span>MATRIX_DATAPACK_IDE v1.0</span>
+      </div>
+      <div class="top-actions">
+        <button id="btn-new-file" title="New File"><i data-lucide="file-plus"></i> New File</button>
+        <button id="btn-presets" title="Load Preset"><i data-lucide="sparkles"></i> Presets</button>
+        <button id="btn-export" class="primary-btn" title="Export Datapack ZIP">
+          <i data-lucide="download"></i> Export ZIP
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="workspace">
+      <!-- Activity Bar (Leftmost Strip) -->
+      <aside class="activity-bar">
+        <button class="activity-btn active" id="act-explorer" title="Explorer">
+          <i data-lucide="files"></i>
+        </button>
+        <button class="activity-btn" id="act-assets" title="Assets & Presets">
+          <i data-lucide="box"></i>
+        </button>
+        <button class="activity-btn" id="act-texture" title="Texture Maker">
+          <i data-lucide="palette"></i>
+        </button>
+        <div class="spacer"></div>
+        <button class="activity-btn" id="act-settings" title="Settings">
+          <i data-lucide="settings"></i>
+        </button>
+      </aside>
+
+      <!-- File Explorer Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <span>EXPLORER : MY_DATAPACK</span>
+          <div class="sidebar-actions">
+            <i data-lucide="file-plus" id="side-add-file" title="New File"></i>
+            <i data-lucide="folder-plus" id="side-add-folder" title="New Folder"></i>
+          </div>
+        </div>
+        <div class="file-tree" id="file-tree">
+          <!-- Tree nodes rendered via TypeScript -->
+        </div>
+      </aside>
+
+      <!-- Main Editor Container -->
+      <main class="editor-container">
+        <!-- Tab Bar -->
+        <div class="tab-bar" id="tab-bar">
+          <!-- Tabs rendered via TypeScript -->
+        </div>
+
+        <!-- Monaco Editor Mount Point -->
+        <div id="monaco-editor" class="editor-area"></div>
+      </main>
+    </div>
+
+    <!-- Status Bar -->
+    <footer class="status-bar">
+      <div class="status-item"><i data-lucide="cpu"></i> Client Side Engine</div>
+      <div class="status-item" id="status-file">No file open</div>
+      <div class="spacer"></div>
+      <div class="status-item">Minecraft 1.20.5+</div>
+      <div class="status-item matrix-status"><i data-lucide="radio"></i> READY</div>
+    </footer>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
