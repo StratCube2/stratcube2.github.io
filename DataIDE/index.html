@@ -1,91 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Strat's Datapack IDE</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Google Fonts for Matrix Monospace font -->
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Monaco Editor CDN -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- JSZip & FileSaver for Client-side ZIP Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <!-- Monaco Code Editor Loader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 </head>
 <body>
-  <div id="app">
-    <!-- Top Bar -->
-    <header class="top-bar">
-      <div class="brand">
-        <i data-lucide="terminal" class="matrix-glow-icon"></i>
-        <span>MATRIX_DATAPACK_IDE v1.0</span>
+  <!-- Global Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Global Progress Overlay -->
+  <div id="progress-overlay" class="hidden">
+    <div class="progress-content">
+      <div class="spinner"></div>
+      <div id="progress-text">Generating Datapack...</div>
+      <div class="progress-bar-bg">
+        <div id="progress-bar-fill"></div>
       </div>
-      <div class="top-actions">
-        <button id="btn-new-file" title="New File"><i data-lucide="file-plus"></i> New File</button>
-        <button id="btn-presets" title="Load Preset"><i data-lucide="sparkles"></i> Presets</button>
-        <button id="btn-export" class="primary-btn" title="Export Datapack ZIP">
-          <i data-lucide="download"></i> Export ZIP
-        </button>
-      </div>
-    </header>
-
-    <!-- Main Workspace Container -->
-    <div class="workspace">
-      <!-- Activity Bar (Leftmost Strip) -->
-      <aside class="activity-bar">
-        <button class="activity-btn active" id="act-explorer" title="Explorer">
-          <i data-lucide="files"></i>
-        </button>
-        <button class="activity-btn" id="act-assets" title="Assets & Presets">
-          <i data-lucide="box"></i>
-        </button>
-        <button class="activity-btn" id="act-texture" title="Texture Maker">
-          <i data-lucide="palette"></i>
-        </button>
-        <div class="spacer"></div>
-        <button class="activity-btn" id="act-settings" title="Settings">
-          <i data-lucide="settings"></i>
-        </button>
-      </aside>
-
-      <!-- File Explorer Sidebar -->
-      <aside class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-          <span>EXPLORER : MY_DATAPACK</span>
-          <div class="sidebar-actions">
-            <i data-lucide="file-plus" id="side-add-file" title="New File"></i>
-            <i data-lucide="folder-plus" id="side-add-folder" title="New Folder"></i>
-          </div>
-        </div>
-        <div class="file-tree" id="file-tree">
-          <!-- Tree nodes rendered via TypeScript -->
-        </div>
-      </aside>
-
-      <!-- Main Editor Container -->
-      <main class="editor-container">
-        <!-- Tab Bar -->
-        <div class="tab-bar" id="tab-bar">
-          <!-- Tabs rendered via TypeScript -->
-        </div>
-
-        <!-- Monaco Editor Mount Point -->
-        <div id="monaco-editor" class="editor-area"></div>
-      </main>
     </div>
-
-    <!-- Status Bar -->
-    <footer class="status-bar">
-      <div class="status-item"><i data-lucide="cpu"></i> Client Side Engine</div>
-      <div class="status-item" id="status-file">No file open</div>
-      <div class="spacer"></div>
-      <div class="status-item">Minecraft 1.20.5+</div>
-      <div class="status-item matrix-status"><i data-lucide="radio"></i> READY</div>
-    </footer>
   </div>
 
-  <script type="module" src="./src/main.ts"></script>
+  <div id="workspace">
+    <!-- Left Activity Bar -->
+    <nav id="activity-bar">
+      <button class="activity-tab active" data-target="panel-explorer" title="File Explorer & Config">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+      </button>
+      <button class="activity-tab" data-target="panel-templates" title="Preset Templates">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+      </button>
+      <button class="activity-tab" data-target="panel-texture" title="Inbuilt Pixel Texture Maker">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+      </button>
+    </nav>
+
+    <!-- Left Sidebar -->
+    <aside id="left-sidebar">
+      <div id="panel-explorer" class="sidebar-panel active split-panel">
+        <!-- Top Half: File Tree Explorer -->
+        <div class="panel-half">
+          <div class="panel-header flex-between">
+            <span>FILE EXPLORER</span>
+            <div style="display:flex; gap:6px;">
+              <button id="btn-add-file" class="icon-btn" title="New Function / Script">+</button>
+              <button id="btn-add-folder" class="icon-btn" title="New Directory">📁</button>
+            </div>
+          </div>
+          <div id="file-tree" class="file-tree-container">
+            <!-- Dynamically populated via TS -->
+          </div>
+        </div>
+
+        <!-- Bottom Half: Pack Meta Configuration -->
+        <div class="panel-half border-top">
+          <div class="panel-header">PACK CONFIGURATION</div>
+          <div class="input-group">
+            <label>Datapack Name</label>
+            <input type="text" id="pack-name" value="strat_custom_pack" placeholder="my_datapack">
+          </div>
+          <div class="input-group">
+            <label>Namespace</label>
+            <input type="text" id="pack-namespace" value="strat" placeholder="custom_namespace">
+          </div>
+          <div class="input-group">
+            <label>Target MC Version</label>
+            <select id="pack-format">
+              <option value="48">1.20.5 - 1.20.6 (Format 48)</option>
+              <option value="57">1.21.0 - 1.21.1 (Format 57)</option>
+              <option value="61">1.21.2 - 1.21.3 (Format 61)</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Description</label>
+            <input type="text" id="pack-desc" value="Created with Strat's Datapack IDE">
+          </div>
+          <div class="input-group">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--green); text-transform:none; font-size:11px;">
+              <input type="checkbox" id="generate-rp-toggle" checked style="width:auto; margin:0;">
+              Bundle Resource Pack
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Presets Panel -->
+      <div id="panel-templates" class="sidebar-panel hidden">
+        <div class="panel-header">PREMADE TEMPLATES</div>
+        <div id="templates-list" class="flex-col gap-2 p-2">
+          <!-- Populated by TS -->
+        </div>
+      </div>
+
+      <!-- Texture Tool Sidebar Controls -->
+      <div id="panel-texture" class="sidebar-panel hidden">
+        <div class="panel-header">TEXTURE PALETTE</div>
+        <div class="input-group">
+          <label>Active Color</label>
+          <input type="color" id="pixel-color" value="#6EE75A" style="height:32px; padding:0; cursor:pointer;">
+        </div>
+        <div class="input-group">
+          <label>Canvas Size</label>
+          <select id="pixel-size">
+            <option value="16">16x16 (Standard)</option>
+            <option value="32">32x32 (HD)</option>
+          </select>
+        </div>
+        <div class="p-2 flex-col gap-2">
+          <button id="btn-clear-canvas" class="btn-primary">Clear Canvas</button>
+          <button id="btn-save-texture" class="btn-primary">Save to Item Models</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Workspace Area -->
+    <main id="center-panel">
+      <!-- Tabs -->
+      <header id="center-tabs">
+        <button class="center-tab active" data-target="tab-editor">Code Editor (.mcfunction / script)</button>
+        <button class="center-tab" data-target="tab-texture">Pixel Art Maker</button>
+      </header>
+      
+      <!-- Content Panes -->
+      <div id="center-content">
+        <!-- Tab 1: Monaco Code Editor -->
+        <div id="tab-editor" class="tab-pane active" style="padding:0; overflow:hidden;">
+          <div id="monaco-container" style="width:100%; height:100%;"></div>
+        </div>
+
+        <!-- Tab 2: Canvas Texture Editor -->
+        <div id="tab-texture" class="tab-pane hidden" style="align-items:center; justify-center; background:#000;">
+          <div id="canvas-wrapper" style="position:relative; display:flex; flex-direction:column; align-items:center; gap:12px; margin:auto;">
+            <canvas id="pixel-canvas" width="512" height="512" style="border: 1px solid var(--border); image-rendering: pixelated; background: #050a06; cursor: crosshair;"></canvas>
+            <div class="text-muted" style="font-size:11px;">Draw your 16x16 custom item texture here.</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Inspector / Actions Sidebar -->
+    <aside id="right-sidebar">
+      <div class="split-panel">
+        <header class="panel-header flex-between">
+          <span>DATAPACK OUTLINE</span>
+        </header>
+        
+        <div id="outline-container" style="flex:1; overflow-y:auto; padding:12px;">
+          <div class="mod-category">
+            <div class="mod-category-title">REGISTERED FUNCTIONS</div>
+            <div id="outline-functions"></div>
+          </div>
+          <div class="mod-category" style="margin-top:16px;">
+            <div class="mod-category-title">CUSTOM ITEMS</div>
+            <div id="outline-items"></div>
+          </div>
+        </div>
+
+        <div class="export-box">
+          <button id="btn-export-datapack" class="btn-export">Export Datapack (.zip)</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="src/main.ts"></script>
 </body>
 </html>
