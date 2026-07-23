@@ -1,209 +1,102 @@
-import { FileItem, IDEState } from './types';
-
-// Declare global Monaco loader
+declare const JSZip: any;
+declare const saveAs: any;
 declare const require: any;
 
-// Initial Datapack File System Mock
-const initialFiles: FileItem[] = [
-  {
-    id: '1',
-    name: 'pack.mcmeta',
-    path: 'pack.mcmeta',
-    type: 'file',
-    language: 'json',
-    content: JSON.stringify({
-      pack: {
-        pack_format: 48,
-        description: "Custom Datapack made in Matrix IDE"
-      }
-    }, null, 2)
-  },
-  { id: '2', name: 'data', path: 'data', type: 'folder' },
-  { id: '3', name: 'mypack', path: 'data/mypack', type: 'folder', parentId: '2' },
-  { id: '4', name: 'function', path: 'data/mypack/function', type: 'folder', parentId: '3' },
-  {
-    id: '5',
-    name: 'main.mcfunction',
-    path: 'data/mypack/function/main.mcfunction',
-    type: 'file',
-    language: 'plaintext',
-    parentId: '4',
-    content: `# Matrix IDE Generated Function\nsay Datapack Loaded Successfully!\nparticle minecraft:totem_of_undying ~ ~1 ~ 0.5 0.5 0.5 0.1 100`
-  },
-  {
-    id: '6',
-    name: 'magic_wand.script',
-    path: 'data/mypack/function/magic_wand.script',
-    type: 'file',
-    language: 'plaintext',
-    parentId: '4',
-    content: `// Your custom script syntax here\nitem magic_wand {\n    name: "Wand of Sparks"\n    on right_click {\n        shoot fireball speed 2.0\n    }\n}`
-  }
-];
+interface IDEFile {
+  id: string;
+  name: string;
+  path: string;
+  content: string;
+  language: string;
+}
 
-class MatrixIDE {
-  private state: IDEState = {
-    files: new Map(),
-    openTabIds: ['5', '6'],
-    activeFileId: '6'
-  };
+class StratsDatapackIDE {
+  private files: Map<string, IDEFile> = new Map();
+  private activeFileId: string | null = null;
+  private monacoEditor: any = null;
 
-  private monacoInstance: any = null;
+  // Pixel Canvas State
+  private canvasSize = 16;
+  private pixelData: string[][] = [];
 
   constructor() {
-    this.initFiles();
+    this.setupDefaultFiles();
+    this.initUI();
     this.initMonaco();
-    this.bindEvents();
+    this.initCanvas();
   }
 
-  private initFiles() {
-    initialFiles.forEach(f => this.state.files.set(f.id, f));
-  }
-
-  private initMonaco() {
-    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
-    
-    require(['vs/editor/editor.main'], () => {
-      // Custom Matrix Theme Definition for Monaco
-      // @ts-ignore
-      monaco.editor.defineTheme('matrix-theme', {
-        base: 'vs-dark',
-        inherit: true,
-        rules: [
-          { token: '', background: '050a06', foreground: 'd0f7d8' },
-          { token: 'comment', foreground: '33a85c', fontStyle: 'italic' },
-          { token: 'keyword', foreground: '00ff66', fontStyle: 'bold' },
-          { token: 'string', foreground: '88ffaa' },
-          { token: 'number', foreground: '00e5ff' }
-        ],
-        colors: {
-          'editor.background': '#050a06',
-          'editor.foreground': '#d0f7d8',
-          'editorCursor.foreground': '#00ff66',
-          'editor.lineHighlightBackground': '#122917',
-          'editorLineNumber.foreground': '#2e633a',
-          'editorLineNumber.activeForeground': '#00ff66'
-        }
-      });
-
-      // @ts-ignore
-      this.monacoInstance = monaco.editor.create(document.getElementById('monaco-editor')!, {
-        value: this.getActiveFileContent(),
-        language: this.getActiveFileLang(),
-        theme: 'matrix-theme',
-        fontFamily: 'Fira Code',
-        fontSize: 14,
-        automaticLayout: true,
-        minimap: { enabled: false }
-      });
-
-      // Update content state when typing in editor
-      this.monacoInstance.onDidChangeModelContent(() => {
-        if (this.state.activeFileId) {
-          const activeFile = this.state.files.get(this.state.activeFileId);
-          if (activeFile) {
-            activeFile.content = this.monacoInstance.getValue();
-          }
-        }
-      });
-
-      this.render();
-    });
-  }
-
-  private bindEvents() {
-    // Lucide Icons initialization
-    // @ts-ignore
-    if (window.lucide) window.lucide.createIcons();
-
-    // Top Action Buttons
-    document.getElementById('btn-new-file')?.addEventListener('click', () => this.createNewFilePrompt());
-    document.getElementById('side-add-file')?.addEventListener('click', () => this.createNewFilePrompt());
-    document.getElementById('btn-export')?.addEventListener('click', () => {
-      alert("ZIP compilation pipeline ready! Ready to link JSZip.");
-    });
-  }
-
-  private createNewFilePrompt() {
-    const fileName = prompt("Enter file name (e.g., custom_item.json or tick.mcfunction):");
-    if (!fileName) return;
-
-    const id = Date.now().toString();
-    const newFile: FileItem = {
-      id,
-      name: fileName,
-      path: `data/mypack/function/${fileName}`,
-      type: 'file',
-      language: fileName.endsWith('.json') ? 'json' : 'plaintext',
-      content: `# ${fileName}\n`
+  private setupDefaultFiles() {
+    const mainFunc: IDEFile = {
+      id: 'f1',
+      name: 'tick.mcfunction',
+      path: 'data/strat/function/tick.mcfunction',
+      language: 'plaintext',
+      content: `# Called every tick by Minecraft\nparticle minecraft:flame ~ ~1 ~ 0.2 0.2 0.2 0.01 5\nexecute as @a[tag=magic] run effect give @s minecraft:speed 1 1 true`
     };
 
-    this.state.files.set(id, newFile);
-    this.state.openTabIds.push(id);
-    this.state.activeFileId = id;
+    const customScript: IDEFile = {
+      id: 'f2',
+      name: 'magic_wand.script',
+      path: 'data/strat/function/magic_wand.script',
+      language: 'plaintext',
+      content: `// Your custom scripting language format\non right_click {\n    shoot fireball speed 1.5;\n    sound minecraft:entity.blaze.shoot;\n}`
+    };
 
-    this.updateMonaco();
-    this.render();
+    this.files.set(mainFunc.id, mainFunc);
+    this.files.set(customScript.id, customScript);
+    this.activeFileId = customScript.id;
   }
 
-  private getActiveFileContent(): string {
-    if (!this.state.activeFileId) return "// No open files";
-    return this.state.files.get(this.state.activeFileId)?.content || "";
-  }
+  private initUI() {
+    // Activity Bar Switching
+    document.querySelectorAll('.activity-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const target = (e.currentTarget as HTMLElement).dataset.target;
+        document.querySelectorAll('.activity-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.add('hidden'));
 
-  private getActiveFileLang(): string {
-    if (!this.state.activeFileId) return "plaintext";
-    return this.state.files.get(this.state.activeFileId)?.language || "plaintext";
-  }
+        (e.currentTarget as HTMLElement).classList.add('active');
+        if (target) document.getElementById(target)?.classList.remove('hidden');
+      });
+    });
 
-  private switchFile(fileId: string) {
-    const file = this.state.files.get(fileId);
-    if (!file || file.type === 'folder') return;
+    // Center Tab Switching
+    document.querySelectorAll('.center-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const target = (e.currentTarget as HTMLElement).dataset.target;
+        document.querySelectorAll('.center-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
 
-    if (!this.state.openTabIds.includes(fileId)) {
-      this.state.openTabIds.push(fileId);
-    }
+        (e.currentTarget as HTMLElement).classList.add('active');
+        if (target) document.getElementById(target)?.classList.remove('hidden');
+      });
+    });
 
-    this.state.activeFileId = fileId;
-    this.updateMonaco();
-    this.render();
-  }
+    // File Creation
+    document.getElementById('btn-add-file')?.addEventListener('click', () => {
+      const name = prompt("Enter file name (e.g. magic.mcfunction):");
+      if (!name) return;
+      
+      const id = Date.now().toString();
+      const file: IDEFile = {
+        id,
+        name,
+        path: `data/strat/function/${name}`,
+        language: 'plaintext',
+        content: `# New file: ${name}\n`
+      };
 
-  private closeTab(fileId: string, event: Event) {
-    event.stopPropagation();
-    this.state.openTabIds = this.state.openTabIds.filter(id => id !== fileId);
+      this.files.set(id, file);
+      this.activeFileId = id;
+      this.renderFileTree();
+      this.loadActiveFileToEditor();
+    });
 
-    if (this.state.activeFileId === fileId) {
-      this.state.activeFileId = this.state.openTabIds[this.state.openTabIds.length - 1] || null;
-      this.updateMonaco();
-    }
+    // Export Datapack
+    document.getElementById('btn-export-datapack')?.addEventListener('click', () => this.exportZip());
 
-    this.render();
-  }
-
-  private updateMonaco() {
-    if (!this.monacoInstance) return;
-    
-    // @ts-ignore
-    const model = monaco.editor.createModel(
-      this.getActiveFileContent(),
-      this.getActiveFileLang()
-    );
-    this.monacoInstance.setModel(model);
-
-    // Update Status Bar
-    const statusElem = document.getElementById('status-file');
-    if (statusElem) {
-      const file = this.state.files.get(this.state.activeFileId || '');
-      statusElem.textContent = file ? file.path : 'No file open';
-    }
-  }
-
-  private render() {
     this.renderFileTree();
-    this.renderTabs();
-    // @ts-ignore
-    if (window.lucide) window.lucide.createIcons();
   }
 
   private renderFileTree() {
@@ -211,49 +104,163 @@ class MatrixIDE {
     if (!treeContainer) return;
 
     treeContainer.innerHTML = '';
+    this.files.forEach(file => {
+      const item = document.createElement('div');
+      item.className = `file-node ${file.id === this.activeFileId ? 'active' : ''}`;
+      item.innerHTML = `📄 ${file.name}`;
+      item.addEventListener('click', () => {
+        this.activeFileId = file.id;
+        this.renderFileTree();
+        this.loadActiveFileToEditor();
+      });
+      treeContainer.appendChild(item);
+    });
 
-    this.state.files.forEach((file) => {
-      const itemEl = document.createElement('div');
-      itemEl.className = `tree-item ${file.type} ${file.id === this.state.activeFileId ? 'active' : ''}`;
-      
-      const icon = file.type === 'folder' ? 'folder' : 'file-code';
-      const depthClass = file.parentId ? 'style="padding-left: 28px;"' : '';
+    this.renderOutline();
+  }
 
-      itemEl.innerHTML = `<i data-lucide="${icon}"></i> <span>${file.name}</span>`;
-      if (depthClass) itemEl.setAttribute('style', `padding-left: ${file.parentId ? 28 : 12}px`);
-
-      itemEl.addEventListener('click', () => this.switchFile(file.id));
-      treeContainer.appendChild(itemEl);
+  private renderOutline() {
+    const outlineFunctions = document.getElementById('outline-functions');
+    if (!outlineFunctions) return;
+    
+    outlineFunctions.innerHTML = '';
+    this.files.forEach(f => {
+      const div = document.createElement('div');
+      div.style.padding = '4px 0';
+      div.style.color = 'var(--text)';
+      div.textContent = `> ${f.name}`;
+      outlineFunctions.appendChild(div);
     });
   }
 
-  private renderTabs() {
-    const tabBar = document.getElementById('tab-bar');
-    if (!tabBar) return;
+  private initMonaco() {
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+    
+    require(['vs/editor/editor.main'], () => {
+      // @ts-ignore
+      monaco.editor.defineTheme('strat-dark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: '', background: '020408', foreground: 'e2e8f0' },
+          { token: 'comment', foreground: '4db842', fontStyle: 'italic' },
+          { token: 'keyword', foreground: '6EE75A', fontStyle: 'bold' }
+        ],
+        colors: {
+          'editor.background': '#020408',
+          'editor.foreground': '#e2e8f0',
+          'editorCursor.foreground': '#6EE75A',
+          'editor.lineHighlightBackground': '#070d14',
+          'editorLineNumber.foreground': 'rgba(110, 231, 90, 0.3)'
+        }
+      });
 
-    tabBar.innerHTML = '';
+      // @ts-ignore
+      this.monacoEditor = monaco.editor.create(document.getElementById('monaco-container')!, {
+        value: this.files.get(this.activeFileId!)?.content || '',
+        language: 'plaintext',
+        theme: 'strat-dark',
+        fontFamily: 'JetBrains Mono',
+        fontSize: 13,
+        automaticLayout: true
+      });
 
-    this.state.openTabIds.forEach((fileId) => {
-      const file = this.state.files.get(fileId);
-      if (!file) return;
-
-      const tabEl = document.createElement('div');
-      tabEl.className = `tab ${file.id === this.state.activeFileId ? 'active' : ''}`;
-      tabEl.innerHTML = `
-        <i data-lucide="file-text"></i>
-        <span>${file.name}</span>
-        <i data-lucide="x" class="tab-close" data-id="${file.id}"></i>
-      `;
-
-      tabEl.addEventListener('click', () => this.switchFile(file.id));
-      tabEl.querySelector('.tab-close')?.addEventListener('click', (e) => this.closeTab(file.id, e));
-
-      tabBar.appendChild(tabEl);
+      this.monacoEditor.onDidChangeModelContent(() => {
+        if (this.activeFileId && this.files.has(this.activeFileId)) {
+          this.files.get(this.activeFileId)!.content = this.monacoEditor.getValue();
+        }
+      });
     });
+  }
+
+  private loadActiveFileToEditor() {
+    if (this.monacoEditor && this.activeFileId) {
+      const file = this.files.get(this.activeFileId);
+      if (file) {
+        this.monacoEditor.setValue(file.content);
+      }
+    }
+  }
+
+  // 16x16 Pixel Editor
+  private initCanvas() {
+    const canvas = document.getElementById('pixel-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+
+    // Init grid data
+    this.pixelData = Array(16).fill(0).map(() => Array(16).fill('transparent'));
+
+    let isDrawing = false;
+
+    const drawGrid = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cellSize = canvas.width / 16;
+
+      for (let r = 0; r < 16; r++) {
+        for (let c = 0; c < 16; c++) {
+          if (this.pixelData[r][c] !== 'transparent') {
+            ctx.fillStyle = this.pixelData[r][c];
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+          }
+          ctx.strokeStyle = 'rgba(110, 231, 90, 0.08)';
+          ctx.strokeRect(c * cellSize, r * cellSize, cellSize, cellSize);
+        }
+      }
+    };
+
+    const paint = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const col = Math.floor(x / (canvas.width / 16));
+      const row = Math.floor(y / (canvas.height / 16));
+
+      const colorInput = document.getElementById('pixel-color') as HTMLInputElement;
+      if (row >= 0 && row < 16 && col >= 0 && col < 16) {
+        this.pixelData[row][col] = colorInput.value;
+        drawGrid();
+      }
+    };
+
+    canvas.addEventListener('mousedown', (e) => { isDrawing = true; paint(e); });
+    canvas.addEventListener('mousemove', (e) => { if (isDrawing) paint(e); });
+    window.addEventListener('mouseup', () => { isDrawing = false; });
+
+    document.getElementById('btn-clear-canvas')?.addEventListener('click', () => {
+      this.pixelData = Array(16).fill(0).map(() => Array(16).fill('transparent'));
+      drawGrid();
+    });
+
+    drawGrid();
+  }
+
+  // Generate .zip output
+  private async exportZip() {
+    const zip = new JSZip();
+
+    const packName = (document.getElementById('pack-name') as HTMLInputElement).value || 'strat_datapack';
+    const namespace = (document.getElementById('pack-namespace') as HTMLInputElement).value || 'strat';
+    const format = parseInt((document.getElementById('pack-format') as HTMLInputElement).value || '48');
+    const desc = (document.getElementById('pack-desc') as HTMLInputElement).value;
+
+    // 1. Pack mcmeta
+    zip.file('pack.mcmeta', JSON.stringify({
+      pack: { pack_format: format, description: desc }
+    }, null, 2));
+
+    // 2. Add functions
+    const funcFolder = zip.folder(`data/${namespace}/function`);
+    this.files.forEach(file => {
+      funcFolder?.file(file.name, file.content);
+    });
+
+    // 3. Download ZIP
+    const blob = await zip.generateAsync({ type: 'blob' });
+    saveAs(blob, `${packName}.zip`);
   }
 }
 
-// Instantiate IDE on Load
 window.addEventListener('DOMContentLoaded', () => {
-  new MatrixIDE();
+  new StratsDatapackIDE();
 });
