@@ -1,0 +1,283 @@
+:root {
+  --bg-darkest: #030704;
+  --bg-dark: #071009;
+  --bg-sidebar: #0a150c;
+  --bg-editor: #050a06;
+  --bg-hover: #122917;
+  --bg-active: #18381f;
+  
+  --border-color: #123318;
+  --border-bright: #00ff66;
+
+  --matrix-green: #00ff66;
+  --matrix-dim: #33a85c;
+  --text-main: #d0f7d8;
+  --text-muted: #5e9168;
+  
+  --font-mono: 'Fira Code', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-darkest);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Top Bar */
+.top-bar {
+  height: 40px;
+  background-color: var(--bg-dark);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--matrix-green);
+  text-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+}
+
+.top-actions {
+  display: flex;
+  gap: 10px;
+}
+
+button {
+  background: var(--bg-sidebar);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background: var(--bg-hover);
+  border-color: var(--matrix-green);
+  color: var(--matrix-green);
+}
+
+button.primary-btn {
+  background: var(--matrix-green);
+  color: var(--bg-darkest);
+  border-color: var(--matrix-green);
+  font-weight: 700;
+}
+
+button.primary-btn:hover {
+  background: #33ff85;
+  box-shadow: 0 0 10px rgba(0, 255, 102, 0.6);
+}
+
+/* Workspace Layout */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Activity Bar */
+.activity-bar {
+  width: 48px;
+  background-color: var(--bg-darkest);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+}
+
+.activity-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  justify-content: center;
+  margin-bottom: 8px;
+  border-radius: 6px;
+}
+
+.activity-btn:hover, .activity-btn.active {
+  color: var(--matrix-green);
+  background: var(--bg-hover);
+}
+
+.activity-btn.active {
+  border-left: 2px solid var(--matrix-green);
+}
+
+.spacer { flex: 1; }
+
+/* File Explorer Sidebar */
+.sidebar {
+  width: 250px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  height: 35px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 1px;
+}
+
+.sidebar-actions i {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+}
+
+.sidebar-actions i:hover {
+  color: var(--matrix-green);
+}
+
+.file-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-main);
+}
+
+.tree-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-item.active {
+  background-color: var(--bg-active);
+  color: var(--matrix-green);
+  border-left: 2px solid var(--matrix-green);
+}
+
+.tree-item.folder {
+  color: var(--matrix-dim);
+  font-weight: 600;
+}
+
+/* Editor Area */
+.editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-editor);
+}
+
+.tab-bar {
+  height: 35px;
+  background-color: var(--bg-dark);
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  font-size: 12px;
+  background-color: var(--bg-darkest);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.tab:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.tab.active {
+  background-color: var(--bg-editor);
+  color: var(--matrix-green);
+  border-top: 2px solid var(--matrix-green);
+}
+
+.tab-close {
+  margin-left: auto;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.tab-close:hover {
+  background-color: rgba(255, 0, 0, 0.3);
+  color: #ff5555;
+}
+
+.editor-area {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+/* Status Bar */
+.status-bar {
+  height: 24px;
+  background-color: var(--bg-darkest);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  gap: 16px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.matrix-status {
+  color: var(--matrix-green);
+  font-weight: 700;
+}
