@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KotlinMCUI-Fork-26.1 Documentation</title>
+    <style>
+        :root {
+          --primary-color: #9333ea;
+          --bg-color: #090510;
+          --text-color: #f3e8ff;
+          --sidebar-bg: #0d0714;
+          --border-color: #2e1065;
+          --code-bg: #1e112a;
+          --code-text: #e9d5ff;
+          --warning-bg: #3b1700;
+          --warning-border: #f59e0b;
+        }
+        
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            line-height: 1.6;
+        }
+
+        /* Sidebar Navigation */
+        nav {
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 2rem 1rem;
+        }
+
+        nav h2 {
+            font-size: 1.2rem;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1.5rem 0;
+        }
+
+        nav li { margin-bottom: 0.5rem; }
+        
+        nav a {
+            text-decoration: none;
+            color: var(--text-color);
+            display: block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        nav a:hover {
+            background: #e2e8f0;
+            color: var(--primary-color);
+        }
+
+        nav .category {
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            padding-left: 0.5rem;
+        }
+
+        /* Main Content */
+        main {
+            margin-left: 280px;
+            padding: 3rem 4rem;
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        h1 { font-size: 2.5rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; margin-top: 2rem; }
+        h2 { font-size: 1.75rem; margin-top: 2.5rem; }
+        h3 { font-size: 1.25rem; }
+
+        a { color: var(--primary-color); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.9rem;
+        }
+
+        code {
+            background: #f1f5f9;
+            color: #ef4444;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+        
+        pre code { background: none; color: inherit; padding: 0; }
+
+        .callout {
+            background: var(--warning-bg);
+            border-left: 4px solid var(--warning-border);
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .callout h4 { margin-top: 0; color: #b45309; }
+
+        hr { border: 0; border-top: 1px solid var(--border-color); margin: 3rem 0; }
+
+        @media (max-width: 768px) {
+            nav { width: 200px; }
+            main { margin-left: 200px; padding: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <h2>KotlinMCUI 26.1 (Outdated)</h2>
+    <ul>
+        <li><a href="#home">Home</a></li>
+    </ul>
+    
+    <div class="category">Start</div>
+    <ul>
+        <li><a href="#create-project">Create a Project</a></li>
+        <li><a href="#run-and-test">Run and Test</a></li>
+        <li><a href="#create-demo">Create a Demo</a></li>
+        <li><a href="#entrypoint">Entrypoint</a></li>
+    </ul>
+
+    <div class="category">Basic</div>
+    <ul>
+        <li><a href="#basic-intro">Introduction</a></li>
+        <li><a href="#layout">Layout</a></li>
+        <li><a href="#measure">Measure</a></li>
+        <li><a href="#modifier">Modifier</a></li>
+        <li><a href="#functions">Functions</a></li>
+        <li><a href="#id">ID</a></li>
+        <li><a href="#property">Property (State)</a></li>
+    </ul>
+
+    <div class="category">Components</div>
+    <ul>
+        <li><a href="#image">Image</a></li>
+        <li><a href="#text">Text</a></li>
+        <li><a href="#scroller">Scroller</a></li>
+        <li><a href="#mousetip">Mouse Tip & Tooltip</a></li>
+        <li><a href="#slider">Slider</a></li>
+        <li><a href="#latebox">LateBox</a></li>
+    </ul>
+
+    <div class="category">Advanced</div>
+    <ul>
+        <li><a href="#custom">Custom Components</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#keyhandler">KeyHandler</a></li>
+        <li><a href="#create-backend">Create a Backend (26.1 Gotchas)</a></li>
+    </ul>
+</nav>
+
+<main>
+
+    <!-- HOME -->
+    <section id="home">
+        <h1>Home</h1>
+        <p>Welcome to <strong>KotlinMCUI-Fork-26.1</strong>, a GUI framework powered by Kotlin DSL, ported and updated for Minecraft 26.1+.</p>
+        
+        <p><strong>Source Repositories:</strong></p>
+        <ul>
+            <li><a href="https://github.com/StratCube2/KotlinMCUIBackend-Fork-26.1">Backend Source (26.1 Fork)</a></li>
+        </ul>
+
+        <h3>Features</h3>
+        <ul>
+            <li><strong>Broad Binary Compatibility:</strong>
+                <ul>
+                    <li>Does not directly depend on Fabric/Forge/NeoForge APIs.</li>
+                    <li>Does not directly depend on Minecraft code (the Backend handles the bridge).</li>
+                    <li>Provides cross-platform entry points.</li>
+                </ul>
+            </li>
+            <li><strong>Declarative & Reactive Layout (Kotlin DSL):</strong>
+                <ul>
+                    <li>Vanilla Minecraft styling.</li>
+                    <li>Global and local UI scaling.</li>
+                    <li>Full keyboard navigation support.</li>
+                    <li><strong>Text Rendering:</strong> Translation, colors, sizing, auto-wrapping, editable text fields, styles (underline, shadow, etc.).</li>
+                    <li><strong>Image Rendering:</strong> Resource locations, local files, cropping strategies, NineSlice.</li>
+                    <li>Focus management, hover highlights, and accessibility narration.</li>
+                    <li>Real-time state updates using local variables and interpolated animations.</li>
+                    <li><strong>Built-in Components:</strong> <code>Button</code>, <code>Slider</code>, <code>Container</code>, <code>Slot</code>, <code>Item</code>, <code>EditableText</code>, <code>Row</code>, <code>Column</code>, <code>LazyColumn</code>, and more.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>Use Cases</h3>
+        <ul>
+            <li><strong>Standalone UI Services:</strong> (e.g., local file managers, network queries). KotlinMCUI provides a binary-compatible layer so your UI code survives version migrations untouched.</li>
+            <li><strong>Minecraft Logic UIs:</strong> Simplifies complex UI creation using a beautiful Jetpack Compose-like DSL, while rendering in Immediate Mode (perfect for games).</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <!-- START -->
+    <section id="create-project">
+        <h1>Start</h1>
+        
+        <h2>Create a Project</h2>
+        <p>Create a Kotlin project using your preferred loader (Fabric/NeoForge).</p>
+        
+        <h3>Add Maven Repository</h3>
+        <p>Using Gradle Kotlin DSL (<code>build.gradle.kts</code>):</p>
+<pre><code>repositories {
+    mavenCentral()
+    maven("https://jitpack.io")
+}</code></pre>
+
+        <h3>Add Dependencies</h3>
+        <p>Add the KotlinMCUI dependency and the 26.1 Backend fork. Example for Fabric 26.1:</p>
+<pre><code>dependencies {
+    implementation("com.github.2894638479:KotlinMCUI:v1.0.0-alpha.30")
+    // Replace with the compiled artifact of the 26.1 backend fork
+    modImplementation("io.github.u2894638479:KotlinMCUI-backend:1.0.0-alpha.1+fabric+26.1")
+}</code></pre>
+
+        <h3>Enable Context Parameters</h3>
+        <p>This framework relies on Kotlin's experimental context parameters. Ensure they are enabled in your build script:</p>
+<pre><code>val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xcontext-parameters"))
+}</code></pre>
+    </section>
+
+    <section id="run-and-test">
+        <h2>Run and Test</h2>
+        <p>Run your mod and open the Mod Menu. You should see `KotlinMCUI` and `KotlinMCUI-backend`. The backend provides a configuration screen containing several built-in demo pages. Open it to verify that everything renders correctly.</p>
+    </section>
+
+    <section id="create-demo">
+        <h2>Create a Demo</h2>
+        <p>To display a screen using the framework, call:</p>
+<pre><code>dslBackend.showScreen {
+    TestPage()
+}</code></pre>
+        <p>If you need the actual Screen object (e.g., to pass back to Minecraft):</p>
+<pre><code>val screen = dslBackend.createScreen {
+    TestPage()
+}.screen as Screen</code></pre>
+        <p><em>Note: Do not call these during mod initialization, as the backend isn't fully ready. Trigger them via keybinds or mod menu entry points.</em></p>
+
+        <h3>Your First Page</h3>
+<pre><code>dslBackend.showScreen {
+    Button(Modifier.size(60.scaled, 20.scaled)) {}
+    DefaultBackground()
+}</code></pre>
+    </section>
+
+    <section id="entrypoint">
+        <h2>Entrypoint</h2>
+        <p>KotlinMCUI provides a loader-agnostic entry point. Create a file at <code>resources/META-INF/services/io.github.u2894638479.kotlinmcui.backend.DslEntryService</code> and write the fully qualified name of your registration class inside.</p>
+        <p>The class must implement <code>DslEntryService</code> and have a no-argument constructor (do not use a Kotlin <code>object</code>).</p>
+    </section>
+
+    <hr>
+
+    <!-- BASIC -->
+    <section id="basic-intro">
+        <h1>Basic</h1>
+        <p>Here is an example of a reactive counter button centered on the screen:</p>
+<pre><code>var i by remember(0)
+
+Button(Modifier.size(Measure.AUTO_MIN, Measure.AUTO_MIN)) {
+    TextFlatten(Modifier.padding(7.scaled)) { "counter: $i".emit() }
+}.clickable { i++ }
+
+DefaultBackground()</code></pre>
+    </section>
+
+    <section id="layout">
+        <h2>Layout</h2>
+        <p>Layouts work similarly to Jetpack Compose. Components are resolved horizontally, then vertically (to allow text to wrap properly).</p>
+        <ul>
+            <li><strong>Box:</strong> Stacks items on top of each other. Later items render above earlier ones.</li>
+            <li><strong>Row:</strong> Arranges items horizontally, sharing available space.</li>
+            <li><strong>Column:</strong> Arranges items vertically, sharing available space.</li>
+        </ul>
+    </section>
+
+    <section id="measure">
+        <h2>Measure</h2>
+        <p>All sizes, margins, and font sizes use the <code>Measure</code> type (a zero-overhead inline value class wrapping a Double).</p>
+        <ul>
+            <li><code>10.px</code>: 10 literal pixels.</li>
+            <li><code>10.scaled</code>: 10 pixels scaled by Minecraft's current GUI scale. <em>(Recommended for almost everything)</em></li>
+        </ul>
+        <p><strong>Special Values:</strong></p>
+        <ul>
+            <li><code>Measure.AUTO</code></li>
+            <li><code>Measure.AUTO_MIN</code></li>
+        </ul>
+        <p>These are implemented by extracting special <code>NaN</code> bit patterns, meaning math operations involving them safely propagate the layout intent.</p>
+    </section>
+
+    <section id="modifier">
+        <h2>Modifier</h2>
+        <p>Modifiers store layout constraints.</p>
+<pre><code>Modifier.padding(10.scaled)
+Modifier.weight(2.0)
+Modifier.align { left().middleY() }
+Modifier.minSize(60.scaled, 40.scaled)
+Modifier.size(40.scaled, 20.scaled)</code></pre>
+        <p>If <code>size</code> is set to <code>AUTO_MIN</code>, the size resolves to the specified <code>minSize</code> (or 0 if unset). If set to <code>AUTO</code>, the parent container dictates the size (usually filling space based on <code>weight</code>).</p>
+    </section>
+
+    <section id="functions">
+        <h2>Functions</h2>
+        <p>UI components and decorators are built as functions requiring a <code>DslContext</code> parameter.</p>
+<pre><code>context(ctx: DslContext)
+fun MyFunc(modifier: Modifier = Modifier, color: Color, text: String, id: Any) = Column(modifier, id = id) {
+    ColorRect(color = color) {}
+    TextFlatten { text.emit(color = color) }
+}</code></pre>
+    </section>
+
+    <section id="id">
+        <h2>ID</h2>
+        <p>Every UI component needs an ID to preserve state across frames. Usually, passing a lambda allows KotlinMCUI to use <code>lambda::class</code> as an implicit ID. For loops, use <code>forEachWithId</code> to automatically append the loop element to the ID context.</p>
+<pre><code>Row {
+    listOf("a","b","c").forEachWithId {
+        TextFlatten { it.emit() }
+    }
+}</code></pre>
+    </section>
+
+    <section id="property">
+        <h2>Property (State)</h2>
+        <p>Use Kotlin property delegation to hold state that persists across frames.</p>
+<pre><code>var expanded by remember(true)
+val size by autoAnimate(if(expanded) 50.px else 25.px)
+
+var height by animatable(10.px)</code></pre>
+        <ul>
+            <li><code>remember</code>: Keeps a value steady across redraws.</li>
+            <li><code>animatable</code>: A mutable property that automatically interpolates changes over time.</li>
+            <li><code>autoAnimate</code>: A read-only property that smoothly interpolates based on another target value.</li>
+        </ul>
+        <p>To pass state references to components like Sliders or Text fields, extract the property using <code>.property</code>:</p>
+<pre><code>val stringProp by "".remember.property
+EditableText(Modifier, stringProp)</code></pre>
+    </section>
+
+    <hr>
+
+    <!-- COMPONENTS -->
+    <section id="image">
+        <h1>Components</h1>
+
+        <h2>Image</h2>
+        <p>Images are referenced via <code>ImageHolder</code>. The width/height provided to the holder define the texture's UV mapping scale, not its render size on screen.</p>
+        <ul>
+            <li><strong>Resource Images:</strong> <code>imageResource("minecraft:textures/block/dirt.png", 16.px, 16.px)</code></li>
+            <li><strong>Local Files:</strong> <code>imageFile(file)</code> or <code>backend.loadLocalImage(file)</code>. This is async and returns an empty holder immediately, re-rendering once loaded.</li>
+        </ul>
+        <p><strong>Rendering Strategies:</strong> Use <code>ImageStrategy</code> to define cropping, repeating, stretching, or <code>nineSlice</code> behavior.</p>
+    </section>
+
+    <section id="text">
+        <h2>Text</h2>
+        <p>Use <code>TextFlatten</code> for single-line text (ignores <code>\n</code>), <code>TextFoldable</code> for manual line breaks, or <code>TextAutoFold</code> to automatically wrap text to fill the parent width.</p>
+<pre><code>TextFlatten {
+    "Red ".emit(color = Color.RED)
+    "Italic".emit(style = DslCharStyle().italic)
+}</code></pre>
+    </section>
+
+    <section id="scroller">
+        <h2>Scroller</h2>
+        <p>Scrollable areas and scrollbars are separated. Link them using a shared <code>Scroller</code> property.</p>
+<pre><code>val scrollerProp by Scroller.empty.remember.property
+LazyColumn(Modifier, scrollerProp) { /* content */ }
+ScrollBarVertical(Modifier.width(20.scaled), scrollerProp) {}</code></pre>
+    </section>
+
+    <section id="mousetip">
+        <h2>Mouse Tip & Tooltip</h2>
+        <p><code>MouseTip { ... }</code> renders arbitrary UI components anchored to the cursor's location.</p>
+        <p>For standard Minecraft tooltips, declare a <code>Tooltip {}</code> somewhere in your layout, and then attach tooltips to individual components using the <code>.tooltip</code> decorator.</p>
+<pre><code>Tooltip {} // Enable tooltips in this view
+
+Button(Modifier) {}
+    .clickable { }
+    .tooltip {
+        Column {
+            TextFlatten { "Hover Text".emit() }
+        }.tooltipBackground()
+    }</code></pre>
+    </section>
+
+    <section id="slider">
+        <h2>Slider</h2>
+        <p>Supports <code>Int</code> and <code>Double</code>. Fully keyboard-accessible (use Tab/Arrow keys to select, Enter to focus, Arrow keys to slide).</p>
+<pre><code>val valueProp by remember(30.0).property
+SliderHorizontal(Modifier.height(20.scaled), 0.0..100.0, valueProp) {
+    TextFlatten { "value: ${valueProp.value}".emit() }
+}</code></pre>
+    </section>
+
+    <section id="latebox">
+        <h2>LateBox</h2>
+        <p><code>LateBox</code> delays building its children until its own vertical layout phase. This allows you to read the container's final <code>width</code> and <code>height</code> to create highly responsive UIs (e.g., stacking side-by-side vs top-to-bottom based on screen space).</p>
+        <p><em>Caveat: Because children are added late, they cannot stretch the `LateBox` itself. The box must have its size determined externally.</em></p>
+    </section>
+
+    <hr>
+
+    <!-- ADVANCED -->
+    <section id="custom">
+        <h1>Advanced</h1>
+
+        <h2>Custom Components</h2>
+        <p>You can create low-level components by implementing or delegating to <code>DslComponent</code>.</p>
+<pre><code>context(ctx: DslContext)
+fun MyComponent(modifier: Modifier = Modifier, id: Any) = collect(
+    object: DslComponent by DslComponentImpl(newChildId(id), modifier) {
+        context(eventModifier: EventModifier, mouse: Position)
+        override fun mouseDown(mouseButton: MouseButton): Boolean {
+            // handle click
+            return true
+        }
+    }
+)</code></pre>
+        <p>The <code>instance</code> variable inside a <code>DslComponent</code> points to the final, fully-decorated object, while <code>delegate</code> or <code>super</code> calls the underlying layer.</p>
+    </section>
+
+    <section id="events">
+        <h2>Events</h2>
+        <p>Keyboard and mouse events traverse downwards. If a function like <code>mouseDown</code> or <code>charTyped</code> returns <code>true</code>, the event is consumed and stops propagating.</p>
+        <p>Scroll events pass down remaining scroll amounts and return unconsumed remainders. Returning <code>0.0</code> stops propagation.</p>
+    </section>
+
+    <section id="keyhandler">
+        <h2>KeyHandler (<code>DslRawKeyHandler</code>)</h2>
+        <p><code>DslRawKeyHandler</code> is a public marker interface implemented by every backend-created <code>Screen</code>. It exposes an input escape hatch for raw keyboard handling at the screen level.</p>
+
+        <h3>Why this exists</h3>
+        <p>Vanilla Minecraft keybind polling runs inside <code>Minecraft.tick()</code> via <code>handleKeybinds()</code>, and this polling is effectively skipped while a GUI screen is open (<code>this.screen != null</code>).</p>
+        <p>That means checks like <code>KeyMapping.consumeClick()</code> (or similar tick-based custom keybind listeners) often won't detect clicks while KotlinMCUI screens are active.</p>
+
+        <h3>How <code>DslRawKeyHandler</code> solves it</h3>
+        <ol>
+            <li><strong>DSL-first safety:</strong> your callback is evaluated only after the DSL tree has had first chance to consume input via <code>dslScreen.keyDown()</code>. Focused widgets (like text fields) keep priority.</li>
+            <li><strong>Consumption control:</strong> if your callback returns <code>true</code>, the key event is marked consumed and does not propagate to the parent screen implementation.</li>
+        </ol>
+
+        <h3>Usage</h3>
+<pre><code>val holder = defaultBackend.create("My Mod Config") {
+    // Your DSL Layout here
+}
+
+// Safely cast and register the raw key listener
+(holder.screen as? DslRawKeyHandler)?.onRawKeyPressed = { event ->
+    val pressedKey = event.key()
+
+    // Example: Intercept the 'E' key to close the screen (vanilla inventory behavior)
+    if (pressedKey == org.lwjgl.glfw.GLFW.GLFW_KEY_E) {
+        holder.screen.onClose()
+        true // Return true to mark the event as consumed
+    } else {
+        false // Return false to let vanilla or DSL elements handle it
+    }
+}
+
+holder.show()</code></pre>
+    </section>
+
+    <section id="create-backend">
+        <h2>Create a Backend (Permanent Warnings for 26.1 Implementers)</h2>
+        <p>If you are writing or maintaining the backend bridge for 26.1 (the <code>kotlinmcuibackend</code> mod), pay extremely close attention to the following architectural changes required by newer Minecraft versions. The 1.20.1 implementation strategies will fail or crash if used directly in 26.1.</p>
+
+        <div class="callout">
+            <h4>1. Lifecycle Shift: extractRenderState replaces render</h4>
+            <p>Minecraft 26.1 separates the tick loop from rendering. UI drawing no longer happens in <code>render(...)</code>. You must override <code>extractRenderState(guiGraphics: GuiGraphicsExtractor, ...)</code> instead. </p>
+            <p><strong>Crucial:</strong> Because you are injecting into a state extraction phase, you must manage matrix stacks correctly: use <code>guiGraphics.pose().pushMatrix()</code> and <code>.popMatrix()</code> to wrap the DSL render call, applying your <code>1 / guiScale</code> downscale there.</p>
+        </div>
+
+        <div class="callout">
+            <h4>2. Sprite-Based Rendering (No more manual 9-slicing)</h4>
+            <p>Buttons, slots, and containers no longer use a manual 9-slice UV map targeting generic textures like <code>inventory.png</code>. You must use <code>renderParam.blitSprite()</code> with <code>RenderPipelines.GUI_TEXTURED</code>.</p>
+            <ul>
+                <li><strong>Buttons:</strong> <code>Identifier.parse("minecraft:widget/button")</code> (handle disabled/highlighted states accordingly).</li>
+                <li><strong>Containers:</strong> <code>Identifier.parse("minecraft:popup/background")</code>.</li>
+                <li><strong>Slots:</strong> <code>Identifier.parse("minecraft:container/slot/slot")</code>.</li>
+            </ul>
+        </div>
+
+        <div class="callout">
+            <h4>3. The ItemStack Bootstrap NPE</h4>
+            <p>If your UI renders an Item early in the game launch cycle (e.g., on the title screen configuration), accessing <code>BuiltInRegistries.ITEM.getOptional(...).get().defaultInstance</code> can throw a <code>NullPointerException: "Components not bound yet"</code>.</p>
+            <p>This happens because <code>extractRenderState</code> executes before the registry bootstrap fully binds item components. Wrap item generation in a <code>try-catch</code> block and gracefully degrade to a missing image (e.g., a "missing" ImageHolder) until the game finishes loading.</p>
+        </div>
+
+        <div class="callout">
+            <h4>4. Character Input Guard (Android/Custom Launcher Bug)</h4>
+            <p>In your <code>Screen</code> implementation, the <code>charTyped</code> method must actively filter out ISO control characters:</p>
+<pre><code>val charVal = event.codepoint().toChar()
+if (Character.isISOControl(charVal)) return true</code></pre>
+            <p>Some custom launchers/Android bridges (like Zalith Launcher) pass raw keystrokes like <code>\n</code> (Enter) down the character-typed pipeline instead of as proper KeyEvents. Without this guard, single-line editable text fields will ingest newlines and break the layout.</p>
+        </div>
+
+        <div class="callout">
+            <h4>5. Scissor Coordinates and Double-Scaling</h4>
+            <p>When implementing <code>withScissor</code>, realize that <code>renderParam.enableScissor()</code> in 26.1 automatically assumes logical GUI coordinates and handles physical pixel math internally.</p>
+            <p>If you divide your clipping rectangle by <code>guiScale</code> before passing it to <code>enableScissor</code> (which was required in 1.20.1), you will double-scale the clip box, causing UI elements to prematurely vanish when the GUI scale is greater than 1x. Pass the raw, integer-casted <code>Rect</code> coordinates directly.</p>
+        </div>
+    </section>
+
+</main>
+
+</body>
+</html>
