@@ -1,6 +1,6 @@
 import { state, loadState, saveState, onStateChange, addCustomFile, loadQuestState } from './state.js';
-import { fetchGameVersions, resolveDependencies, fetchModrinthVersionData, fetchModrinthProjectData } from './api.js';
-import { renderModList, executeSearch, renderAddons } from './ui.js';
+import { fetchGameVersions, resolveDependencies, buildModrinthMod } from './api.js';
+import { renderModList, executeSearch, renderAddons, refreshSearchResults } from './ui.js';
 import { debounce } from './utils.js';
 import { initQuests, triggerQuestRenders } from './quests.js';
 import { exportMrPack, exportQuestsZip } from './export.js';
@@ -9,9 +9,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadState();
   loadQuestState();
   
+  // Mod list changed: update the list and the "Added" buttons, but don't refetch
+  // (that would reset the page and scroll position on every add/remove or keystroke).
   onStateChange(() => {
     renderModList();
-    triggerSearch(); 
+    refreshSearchResults();
   });
   
   bindNavigation();
@@ -19,7 +21,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindExportButtons();
   
   await populateGameVersions();
-  updateSinytraVisibility(); // Setup Initial Sinytra Visibility
+  updateSinytraVisibility();
 
   await initQuests();
   await renderAddons(); 
@@ -73,10 +75,7 @@ function bindFormInputs() {
   document.getElementById('mc-version').addEventListener('change', e => handleClearStateConfirm(e, 'mcVersion', "Changing Minecraft version will clear all current mods. Proceed?"));
   document.getElementById('pack-loader').addEventListener('change', e => handleClearStateConfirm(e, 'loader', "Changing Mod Loader will clear all current mods. Proceed?"));
 
-  const debouncedSearch = debounce(triggerSearch, 300);
-  document.getElementById('mod-search').addEventListener('input', debouncedSearch);
-  document.getElementById('search-source').addEventListener('change', triggerSearch);
-  document.getElementById('search-category').addEventListener('change', triggerSearch);
+  bindSearchControls();
 
   // Auto-Dependency Button
   document.getElementById('btn-auto-dep').addEventListener('click', async (e) => {
@@ -142,43 +141,28 @@ function updateSinytraVisibility() {
   }
 }
 
+const SINYTRA_SLUGS = ['connector', 'connector-extras', 'forgified-fabric-api'];
+
 async function installSinytraMods() {
-  const slugs = ['connector', 'connector-extras', 'forgified-fabric-api'];
   let added = 0;
-  
-  for (let slug of slugs) {
+
+  for (const slug of SINYTRA_SLUGS) {
     if (state.mods.some(m => m.slug === slug)) continue;
     try {
-      const versions = await fetchModrinthVersionData(slug);
-      if (versions && versions.length > 0) {
-        const proj = await fetchModrinthProjectData(slug);
-        const file = versions[0].files.find(f => f.primary) || versions[0].files[0];
-        
-        state.mods.push({
-          id: proj.id, slug: proj.slug, title: proj.title,
-          category: 'Utility', custom: false, source: 'modrinth',
-          mrpackData: {
-            path: "mods/" + file.filename,
-            hashes: { sha1: file.hashes.sha1, sha512: file.hashes.sha512 },
-            env: { client: "required", server: "required" },
-            downloads: [file.url], fileSize: file.size
-          }
-        });
-        added++;
-      }
+      const mod = await buildModrinthMod(slug, { category: 'Utility' });
+      if (mod) { state.mods.push(mod); added++; }
     } catch (err) {
       console.warn(`Could not auto-install Sinytra requirement: ${slug}`, err);
     }
   }
-  
-  if (added === 0 && slugs.some(s => !state.mods.some(m => m.slug === s))) {
-    alert("Warning: Could not fetch Sinytra mods. Ensure they exist for this Minecraft version.");
+
+  if (added === 0 && SINYTRA_SLUGS.some(s => !state.mods.some(m => m.slug === s))) {
+    alert('Warning: Could not fetch Sinytra mods. Ensure they exist for this Minecraft version.');
   }
 }
 
 function removeSinytraMods() {
-  const slugs = ['connector', 'connector-extras', 'forgified-fabric-api'];
-  state.mods = state.mods.filter(m => !slugs.includes(m.slug));
+  state.mods = state.mods.filter(m => !SINYTRA_SLUGS.includes(m.slug));
 }
 
 function bindExportButtons() {
@@ -225,12 +209,62 @@ async function populateGameVersions() {
   document.getElementById('pack-loader').value = state.loader;
 }
 
-function triggerSearch() {
-  if(!state.mcVersion || !state.loader) return;
-  const query = document.getElementById('mod-search').value.trim();
-  const source = document.getElementById('search-source').value;
-  const category = document.getElementById('search-category').value;
-  const resultsDiv = document.getElementById('search-results');
-  
-  executeSearch(query, source, category, resultsDiv);
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+let currentPage = 1;
+const $ = id => document.getElementById(id);
+
+function readFilters() {
+  return {
+    query: $('mod-search').value.trim(),
+    page: currentPage,
+    sort: $('search-sort').value,
+    categories: [...document.querySelectorAll('#search-categories input:checked')].map(i => i.value),
+    environment: $('search-environment').value,
+    openSource: $('search-open-source').checked,
+    minDownloads: Number($('search-min-downloads').value),
+    minFollows: Number($('search-min-follows').value)
+  };
+}
+
+function bindSearchControls() {
+  const search = debounce(() => triggerSearch(), 300);
+  const searchNow = () => triggerSearch();
+
+  $('mod-search').addEventListener('input', search);
+  $('mod-search').addEventListener('keydown', e => { if (e.key === 'Enter') searchNow(); });
+  $('btn-search').addEventListener('click', searchNow);
+
+  ['search-source', 'search-sort', 'search-environment', 'search-min-downloads', 'search-min-follows', 'search-open-source']
+    .forEach(id => $(id).addEventListener('change', searchNow));
+  document.querySelectorAll('#search-categories input').forEach(i => i.addEventListener('change', search));
+
+  $('search-source').addEventListener('change', updateSourceFilters);
+
+  $('btn-reset-filters').addEventListener('click', () => {
+    $('search-sort').value = 'relevance';
+    $('search-environment').value = '';
+    $('search-min-downloads').value = '0';
+    $('search-min-follows').value = '0';
+    $('search-open-source').checked = false;
+    document.querySelectorAll('#search-categories input').forEach(i => { i.checked = false; });
+    searchNow();
+  });
+
+  updateSourceFilters();
+}
+
+// Category / environment / min-downloads / min-stars filters are Modrinth-only.
+function updateSourceFilters() {
+  const isModrinth = $('search-source').value === 'modrinth';
+  document.querySelectorAll('.modrinth-only').forEach(el => el.classList.toggle('hidden', !isModrinth));
+}
+
+/** Runs a search. Any change to the filters/query starts again from page 1. */
+function triggerSearch({ page = 1 } = {}) {
+  if (!state.mcVersion || !state.loader) return;
+  currentPage = page;
+  executeSearch(readFilters(), $('search-source').value, p => triggerSearch({ page: p }));
 }

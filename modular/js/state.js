@@ -5,7 +5,7 @@ export const state = {
   mcVersion: "",
   loader: "fabric",
   loaderVersion: "",
-  sinytraEnabled: false, // <-- ADDED
+  sinytraEnabled: false,
   mods: []
 };
 

@@ -162,6 +162,32 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 .mod-info h4 { font-size: 13px; color: var(--text); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mod-info p { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mod-card .btn-primary { padding: 4px 8px; font-size: 11px; flex-shrink: 0; }
+.mod-stats { font-size: 10px; color: var(--green-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge-connector {
+  font-size: 9px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px;
+  color: var(--green); background: rgba(110, 231, 90, 0.08);
+}
+
+/* Search filters */
+.check-row { display: flex !important; align-items: center; gap: 8px; cursor: pointer; text-transform: none !important; font-size: 11px !important; margin: 0 !important; }
+.check-row input { width: auto; margin: 0; }
+.chip-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { display: inline-block !important; margin: 0 !important; text-transform: none !important; cursor: pointer; }
+.chip input { display: none; }
+.chip span {
+  display: inline-block; padding: 2px 7px; font-size: 10px; color: var(--muted);
+  border: 1px solid var(--border-light); border-radius: 10px; transition: all 0.15s;
+}
+.chip:hover span { color: var(--text); }
+.chip input:checked + span { color: var(--green); border-color: var(--green); background: rgba(110, 231, 90, 0.1); }
+
+/* Pagination */
+#search-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; flex-shrink: 0; }
+#search-pagination:empty { display: none; }
+.page-btn { padding: 3px 8px !important; min-width: 28px; font-size: 11px !important; }
+.page-btn.active { background: rgba(110, 231, 90, 0.25); color: var(--green); border-color: var(--green); opacity: 1; }
+.page-gap { color: var(--muted); padding: 0 2px; }
+.page-info { margin-left: 8px; font-size: 10px; }
 
 /* Right Panel Elements */
 #mod-list-container { padding: 8px; flex: 1; overflow-y: auto; }
