@@ -1,54 +1,13 @@
 import { state, questState, customFiles } from './state.js';
-import { toSNBT } from './utils.js';
+import { buildQuestFiles } from './quest-io.js';
 
 export async function exportQuestsZip() {
   if (!window.JSZip || !window.saveAs) return alert("Export libraries failed to load.");
-  
+
   const zip = new JSZip();
-  zip.file('data.snbt', toSNBT({ version: 3, default_quest_shape: '', default_quest_disableable: false }));
-  zip.file('chapter_groups.snbt', toSNBT({ chapter_groups: [] }));
-  
-  const chaptersFolder = zip.folder('chapters');
-  questState.chapters.forEach(ch => {
-    const questObjs = ch.quests.map(q => ({
-      title: q.title,
-      subtitle: q.subtitle || undefined,
-      description: q.description && q.description.length ? q.description : undefined,
-      x: `__RAW__${q.x}d`,
-      y: `__RAW__${q.y}d`,
-      shape: q.shape && q.shape !== 'default' ? q.shape : undefined,
-      dependencies: q.dependencies && q.dependencies.length ? q.dependencies : undefined,
-      // --- FIX: Add always_invisible to root quests to ensure dependencies load correctly ---
-      always_invisible: (!q.dependencies || q.dependencies.length === 0) ? false : undefined,
-      tasks: q.tasks.map(t => {
-        if(t.taskType === 'kill') return { id: t.id, type: 'kill', entity: t.item, value: `__RAW__${t.count||1}L` };
-        if(t.taskType === 'checkmark') return { id: t.id, type: 'checkmark', title: t.item };
-        return { id: t.id, type: 'item', item: { id: t.item, Count: `__RAW__1b` }, count: t.count > 1 ? `__RAW__${t.count}L` : undefined };
-      }),
-      rewards: q.rewards.map(r => {
-        if(r.rewardType === 'xp') return { id: r.id, type: 'xp', xp: r.count||100 };
-        if(r.rewardType === 'command') return { id: r.id, type: 'command', command: r.item, player_command: false };
-        return { id: r.id, type: 'item', item: { id: r.item, Count: `__RAW__${r.count||1}b` } };
-      }),
-      id: q.id
-    }));
-    
-    const chapterObj = {
-      id: ch.id,
-      group: '',
-      order_index: ch.order_index,
-      filename: ch.filename,
-      title: ch.title || undefined,
-      default_quest_shape: '',
-      quests: questObjs,
-      quest_links: []
-    };
-    
-    chaptersFolder.file(`${ch.filename}.snbt`, toSNBT(chapterObj));
-  });
-  
-  const content = await zip.generateAsync({ type: "blob" });
-  saveAs(content, "ftbquests.zip");
+  Object.entries(buildQuestFiles()).forEach(([path, text]) => zip.file(path, text));
+
+  saveAs(await zip.generateAsync({ type: "blob" }), "ftbquests.zip");
 }
 
 export async function exportMrPack() {
@@ -128,50 +87,10 @@ export async function exportMrPack() {
 
     zip.file("modrinth.index.json", JSON.stringify(indexJson, null, 2));
 
-    // INJECT QUESTS INTO MRPACK OVERRIDES
-    if (questState && questState.chapters && questState.chapters.some(c => c.quests.length > 0)) {
-      const questsDir = zip.folder("overrides/config/ftbquests/quests");
-      
-      questsDir.file('data.snbt', toSNBT({ version: 3, default_quest_shape: '', default_quest_disableable: false }));
-      questsDir.file('chapter_groups.snbt', toSNBT({ chapter_groups: [] }));
-      
-      const chaptersFolder = questsDir.folder('chapters');
-      questState.chapters.forEach(ch => {
-        const questObjs = ch.quests.map(q => ({
-          title: q.title,
-          subtitle: q.subtitle || undefined,
-          description: q.description && q.description.length ? q.description : undefined,
-          x: `__RAW__${q.x}d`,
-          y: `__RAW__${q.y}d`,
-          shape: q.shape && q.shape !== 'default' ? q.shape : undefined,
-          dependencies: q.dependencies && q.dependencies.length ? q.dependencies : undefined,
-          // --- FIX: Add always_invisible to root quests to ensure dependencies load correctly ---
-          always_invisible: (!q.dependencies || q.dependencies.length === 0) ? false : undefined,
-          tasks: q.tasks.map(t => {
-            if(t.taskType === 'kill') return { id: t.id, type: 'kill', entity: t.item, value: `__RAW__${t.count||1}L` };
-            if(t.taskType === 'checkmark') return { id: t.id, type: 'checkmark', title: t.item };
-            return { id: t.id, type: 'item', item: { id: t.item, Count: `__RAW__1b` }, count: t.count > 1 ? `__RAW__${t.count}L` : undefined };
-          }),
-          rewards: q.rewards.map(r => {
-            if(r.rewardType === 'xp') return { id: r.id, type: 'xp', xp: r.count||100 };
-            if(r.rewardType === 'command') return { id: r.id, type: 'command', command: r.item, player_command: false };
-            return { id: r.id, type: 'item', item: { id: r.item, Count: `__RAW__${r.count||1}b` } };
-          }),
-          id: q.id
-        }));
-        
-        const chapterObj = {
-          id: ch.id,
-          group: '',
-          order_index: ch.order_index,
-          filename: ch.filename,
-          title: ch.title || undefined,
-          default_quest_shape: '',
-          quests: questObjs,
-          quest_links: []
-        };
-        
-        chaptersFolder.file(`${ch.filename}.snbt`, toSNBT(chapterObj));
+    // Bundle quests into the pack's overrides
+    if (questState.chapters.some(c => c.quests.length > 0)) {
+      Object.entries(buildQuestFiles()).forEach(([path, text]) => {
+        zip.file("overrides/config/ftbquests/quests/" + path, text);
       });
     }
 

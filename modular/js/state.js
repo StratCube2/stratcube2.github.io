@@ -68,3 +68,12 @@ export function addCustomFile(modObj, file) {
 export function removeCustomFile(id) {
   customFiles = customFiles.filter(f => f.id !== id);
 }
+
+export function clearCustomFiles() {
+  customFiles = [];
+}
+
+/** Registers the File behind a custom mod without touching the mod list or saving. */
+export function setCustomFile(id, file) {
+  customFiles.push({ id, file });
+}

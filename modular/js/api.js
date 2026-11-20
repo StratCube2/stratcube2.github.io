@@ -118,6 +118,43 @@ export async function buildModrinthMod(slugOrId, { category } = {}) {
   };
 }
 
+/** Whether a mod has a usable version for the current MC version / loader setup. */
+export async function checkModAvailability(slug) {
+  try {
+    const version = pickVersion(await fetchModrinthVersionData(slug));
+    return version
+      ? { available: true, viaConnector: isViaConnector(version.loaders) }
+      : { available: false };
+  } catch {
+    return { available: false }; // unknown slug or API error
+  }
+}
+
+const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+
+/** Maps SHA-1 hashes of mod files to the Modrinth versions they belong to: { [sha1]: version } */
+export async function lookupVersionsByHash(hashes) {
+  const result = {};
+  for (const batch of chunk([...new Set(hashes)], 200)) {
+    const res = await fetch(`${MODRINTH}/version_files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes: batch, algorithm: 'sha1' })
+    });
+    if (!res.ok) throw new Error(`Modrinth API Error: ${res.status}`);
+    Object.assign(result, await res.json());
+  }
+  return result;
+}
+
+export async function fetchProjects(ids) {
+  const projects = [];
+  for (const batch of chunk([...new Set(ids)], 100)) {
+    projects.push(...await cachedFetch(`${MODRINTH}/projects?ids=${encodeURIComponent(JSON.stringify(batch))}`));
+  }
+  return projects;
+}
+
 export async function resolveDependencies() {
   let addedCount = 0;
   const queue = state.mods.filter(m => m.source === 'modrinth').map(m => m.id);

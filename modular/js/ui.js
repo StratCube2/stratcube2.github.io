@@ -2,7 +2,7 @@ import { state, saveState, removeCustomFile } from './state.js';
 import { escapeHtml } from './utils.js';
 import {
   searchModrinth, searchCurseForge, buildModrinthMod, primaryCategory,
-  isViaConnector, SEARCH_PAGE_SIZE
+  isViaConnector, checkModAvailability, SEARCH_PAGE_SIZE
 } from './api.js';
 
 const FALLBACK_ICON = 'https://docs.modrinth.com/img/logo.svg';
@@ -89,7 +89,7 @@ function renderSearchResults() {
 }
 
 function createModCard(mod, source) {
-  const isAdded = state.mods.some(m => m.id === mod.id);
+  const added = state.mods.some(m => m.id === mod.id);
   const stats = [
     `⬇ ${formatCount(mod.downloads)}`,
     mod.follows != null ? `★ ${formatCount(mod.follows)}` : null,
@@ -105,10 +105,10 @@ function createModCard(mod, source) {
       <p>${escapeHtml(mod.desc)}</p>
       <div class="mod-stats">${stats}</div>
     </div>
-    <button class="btn-primary" ${isAdded ? 'disabled' : ''}>${isAdded ? 'Added' : 'Add'}</button>
+    <button class="btn-primary" ${added ? 'disabled' : ''}>${added ? 'Added' : 'Add'}</button>
   `;
 
-  if (!isAdded) {
+  if (!added) {
     const btn = div.querySelector('button');
     btn.addEventListener('click', () => addSearchedMod(mod, source, btn));
   }
@@ -247,6 +247,18 @@ function createCategoryDOM(categoryName, mods) {
 // Addons
 // ---------------------------------------------------------------------------
 
+const addonViews = [];
+
+const configKey = () => [state.mcVersion, state.loader, state.sinytraEnabled].join('|');
+const isAdded = slug => state.mods.some(m => m.slug === slug);
+
+async function runPool(items, limit, worker) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length) await worker(queue.shift());
+  }));
+}
+
 export async function renderAddons() {
   const container = document.getElementById('addons-list');
   try {
@@ -255,18 +267,12 @@ export async function renderAddons() {
     const data = await res.json();
 
     container.innerHTML = '';
+    addonViews.length = 0;
     const fragment = document.createDocumentFragment();
-
     data.addons.forEach(addon => {
-      const div = document.createElement('div');
-      div.className = 'addon-item';
-      div.innerHTML = `
-        <h4>${escapeHtml(addon.name)}</h4>
-        <p>${escapeHtml(addon.description)}</p>
-        <button class="btn-primary w-full">Install Addon</button>
-      `;
-      div.querySelector('button').addEventListener('click', e => installAddon(addon, e.target));
-      fragment.appendChild(div);
+      const view = createAddonView(addon);
+      addonViews.push(view);
+      fragment.appendChild(view.el);
     });
     container.appendChild(fragment);
   } catch (err) {
@@ -274,14 +280,138 @@ export async function renderAddons() {
   }
 }
 
-async function installAddon(addon, btn) {
+/**
+ * Call after anything that can change the answer: mod list, MC version, loader or Sinytra.
+ * Re-checks open addons if the configuration changed and refreshes "added" states.
+ */
+export function refreshAddons() {
+  addonViews.forEach(view => {
+    if (view.el.open) ensureChecked(view);
+    renderAddonRows(view);
+  });
+}
+
+function createAddonView(addon) {
+  const el = document.createElement('details');
+  el.className = 'addon-item';
+  el.innerHTML = `
+    <summary>
+      <h4>${escapeHtml(addon.name)}</h4>
+      <p>${escapeHtml(addon.description)}</p>
+      <span class="addon-meta">${addon.mods.length} mods</span>
+    </summary>
+    <div class="addon-mods"></div>
+    <div class="addon-actions">
+      <button class="link-btn" data-act="all">Select all</button>
+      <button class="link-btn" data-act="none">None</button>
+    </div>
+    <button class="btn-primary w-full addon-install"></button>
+  `;
+
+  const view = {
+    addon, el,
+    status: new Map(),     // slug -> 'checking' | { available, viaConnector }
+    selected: new Set(),
+    checkedKey: null,
+    checking: null,
+    installing: false,
+    listEl: el.querySelector('.addon-mods'),
+    installBtn: el.querySelector('.addon-install')
+  };
+
+  el.addEventListener('toggle', () => { if (el.open) ensureChecked(view); });
+  el.querySelector('[data-act="all"]').addEventListener('click', () => {
+    addon.mods.forEach(slug => { if (isSelectable(view, slug)) view.selected.add(slug); });
+    renderAddonRows(view);
+  });
+  el.querySelector('[data-act="none"]').addEventListener('click', () => {
+    view.selected.clear();
+    renderAddonRows(view);
+  });
+  view.installBtn.addEventListener('click', () => installAddon(view));
+
+  renderAddonRows(view);
+  return view;
+}
+
+function isSelectable(view, slug) {
+  const st = view.status.get(slug);
+  return typeof st === 'object' && st.available && !isAdded(slug);
+}
+
+async function ensureChecked(view) {
+  const key = configKey();
+  if (!state.mcVersion || !state.loader || view.checkedKey === key || view.checking === key) return;
+
+  view.checking = key;
+  view.status.clear();
+  view.selected.clear();
+  view.addon.mods.forEach(slug => view.status.set(slug, 'checking'));
+  renderAddonRows(view);
+
+  await runPool(view.addon.mods, 4, async slug => {
+    const result = await checkModAvailability(slug);
+    if (configKey() !== key) return; // configuration changed mid-check; a newer check supersedes this one
+    view.status.set(slug, result);
+    if (result.available && !isAdded(slug)) view.selected.add(slug);
+    renderAddonRows(view);
+  });
+
+  if (view.checking === key) view.checking = null;
+  if (configKey() === key) view.checkedKey = key;
+  renderAddonRows(view);
+}
+
+function renderAddonRows(view) {
+  view.addon.mods.forEach(slug => { if (isAdded(slug)) view.selected.delete(slug); });
+
+  view.listEl.innerHTML = '';
+  view.addon.mods.forEach(slug => {
+    const st = view.status.get(slug);
+    const added = isAdded(slug);
+
+    let label = '';
+    if (added) label = '<span class="addon-status muted">added</span>';
+    else if (st === 'checking') label = '<span class="addon-status muted">checking…</span>';
+    else if (st?.available === false) label = '<span class="addon-status bad">unavailable</span>';
+    else if (st?.viaConnector) label = '<span class="badge-connector">Fabric via Connector</span>';
+    else if (st?.available) label = '<span class="addon-status ok">✓</span>';
+
+    const row = document.createElement('label');
+    row.className = 'addon-mod';
+    row.innerHTML = `
+      <input type="checkbox" ${view.selected.has(slug) ? 'checked' : ''} ${isSelectable(view, slug) ? '' : 'disabled'}>
+      <span class="addon-mod-name" title="${escapeHtml(slug)}">${escapeHtml(slug)}</span>
+      ${label}
+    `;
+    row.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) view.selected.add(slug); else view.selected.delete(slug);
+      updateInstallButton(view);
+    });
+    view.listEl.appendChild(row);
+  });
+
+  updateInstallButton(view);
+}
+
+function updateInstallButton(view) {
+  if (view.installing) return;
+  const n = view.selected.size;
+  view.installBtn.textContent = `Install Selected (${n})`;
+  view.installBtn.disabled = n === 0 || !!view.checking;
+}
+
+async function installAddon(view) {
   if (!state.mcVersion || !state.loader) return alert('Set MC version and loader!');
-  btn.textContent = 'Installing...';
-  btn.disabled = true;
+  const slugs = [...view.selected].filter(slug => !isAdded(slug));
+  if (slugs.length === 0) return;
+
+  view.installing = true;
+  view.installBtn.disabled = true;
 
   let added = 0;
-  for (const slug of addon.mods) {
-    if (state.mods.some(m => m.slug === slug)) continue;
+  for (const [i, slug] of slugs.entries()) {
+    view.installBtn.textContent = `Installing ${i + 1}/${slugs.length}...`;
     try {
       const mod = await buildModrinthMod(slug);
       if (mod) { state.mods.push(mod); added++; }
@@ -290,7 +420,30 @@ async function installAddon(addon, btn) {
     }
   }
 
-  if (added > 0) saveState();
-  btn.textContent = added > 0 ? `Added ${added} mods` : 'Already Added / N/A';
-  setTimeout(() => { btn.textContent = 'Install Addon'; btn.disabled = false; }, 2000);
+  if (added > 0) saveState(); // also re-renders this addon's rows via refreshAddons()
+  view.installBtn.textContent = added > 0 ? `Added ${added} mods` : 'Nothing installed';
+  setTimeout(() => { view.installing = false; renderAddonRows(view); }, 2000);
+}
+
+// ---------------------------------------------------------------------------
+// Toasts & progress overlay
+// ---------------------------------------------------------------------------
+
+export function toast(message, { type = 'info', duration = 7000 } = {}) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  el.addEventListener('click', () => el.remove());
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+export function showProgress(text, fraction = null) {
+  document.getElementById('progress-overlay').classList.remove('hidden');
+  document.getElementById('progress-text').textContent = text;
+  document.getElementById('progress-bar-fill').style.width = fraction == null ? '100%' : `${Math.round(fraction * 100)}%`;
+}
+
+export function hideProgress() {
+  document.getElementById('progress-overlay').classList.add('hidden');
 }

@@ -199,6 +199,8 @@
             <button id="btn-add-chapter" class="btn-primary" style="padding:4px 8px;">+ Chapter</button>
             <button id="btn-layout-quests" class="btn-primary" style="padding:4px 8px;">⊞ Layout</button>
             <button id="btn-add-quest" class="btn-primary" style="padding:4px 8px;">+ Quest</button>
+            <button id="btn-import-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;">⬆ Import Quests</button>
+            <input type="file" id="quests-input" accept=".zip,.mrpack,.snbt" multiple class="hidden">
             <button id="btn-export-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;">⬇ Export Quests</button>
           </div>
           
@@ -241,6 +243,8 @@
 
         <div class="export-box">
           <button id="btn-export-right" class="btn-export">Export as .mrpack</button>
+          <button id="btn-import-mrpack" class="btn-secondary">Import .mrpack</button>
+          <input type="file" id="mrpack-input" accept=".mrpack,.zip" class="hidden">
         </div>
       </div>
       

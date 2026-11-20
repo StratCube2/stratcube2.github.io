@@ -1,9 +1,10 @@
 import { state, loadState, saveState, onStateChange, addCustomFile, loadQuestState } from './state.js';
 import { fetchGameVersions, resolveDependencies, buildModrinthMod } from './api.js';
-import { renderModList, executeSearch, renderAddons, refreshSearchResults } from './ui.js';
+import { renderModList, executeSearch, renderAddons, refreshAddons, refreshSearchResults, toast } from './ui.js';
 import { debounce } from './utils.js';
 import { initQuests, triggerQuestRenders } from './quests.js';
 import { exportMrPack, exportQuestsZip } from './export.js';
+import { importMrPack, importQuests } from './import.js';
 
 document.addEventListener("DOMContentLoaded", async () => {
   loadState();
@@ -14,11 +15,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   onStateChange(() => {
     renderModList();
     refreshSearchResults();
+    refreshAddons(); // re-checks addon availability when version/loader/Sinytra changed
   });
   
   bindNavigation();
   bindFormInputs();
   bindExportButtons();
+  bindImportButtons();
   
   await populateGameVersions();
   updateSinytraVisibility();
@@ -163,6 +166,53 @@ async function installSinytraMods() {
 
 function removeSinytraMods() {
   state.mods = state.mods.filter(m => !SINYTRA_SLUGS.includes(m.slug));
+}
+
+// ---------------------------------------------------------------------------
+// Import
+// ---------------------------------------------------------------------------
+
+function ensureOption(select, value) {
+  if (![...select.options].some(o => o.value === value)) select.add(new Option(value, value));
+  select.value = value;
+}
+
+/** Pushes imported pack settings from state back into the form controls. */
+function syncPackInputs() {
+  $('pack-name').value = state.name;
+  $('loader-version').value = state.loaderVersion;
+  ensureOption($('mc-version'), state.mcVersion);
+  $('pack-loader').value = state.loader;
+  updateSinytraVisibility();
+}
+
+function bindImportButtons() {
+  const bindImport = (buttonId, inputId, handler, afterImport) => {
+    const button = $(buttonId), input = $(inputId);
+    button.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const files = [...input.files];
+      input.value = '';
+      if (files.length === 0) return;
+
+      try {
+        const message = await handler(files);
+        if (message === null) return; // cancelled
+        afterImport();
+        toast(message, { type: 'success' });
+      } catch (err) {
+        console.error(err);
+        toast(`Import failed: ${err.message}`, { type: 'error' });
+      }
+    });
+  };
+
+  bindImport('btn-import-mrpack', 'mrpack-input', files => importMrPack(files[0]), () => {
+    syncPackInputs();
+    triggerSearch();
+    triggerQuestRenders();
+  });
+  bindImport('btn-import-quests', 'quests-input', importQuests, triggerQuestRenders);
 }
 
 function bindExportButtons() {
