@@ -47,9 +47,7 @@ export const questState = {
   canvasScale: 1,
   dragging: null,
   isPanning: false,
-  panStart: null,
-  modsData: [],
-  expandedMod: null
+  panStart: null
 };
 
 const STORAGE_KEY = "modpackgen_state";

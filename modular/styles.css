@@ -308,3 +308,40 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 }
 .tool-item span { overflow-wrap: anywhere; min-width: 0; }
 .tool-item button { background: none; border: none; color: #ff4466; cursor: pointer; font-family: inherit; flex-shrink: 0; }
+
+/* Quest explorer */
+.qx-top { padding: 8px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.qx-seg { display: flex; border: 1px solid var(--border-light); border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+.qx-seg button { flex: 1; background: transparent; border: none; color: var(--muted); padding: 6px 10px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.qx-seg button.active { background: var(--green); color: #000; }
+.qx-target { padding: 0 8px 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex-shrink: 0; }
+.qx-target .qx-seg { flex: 1; min-width: 120px; }
+.qx-toggle { background: transparent; border: 1px solid var(--border-light); color: var(--muted); border-radius: 4px; padding: 6px 10px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.qx-toggle.active { border-color: var(--green); color: var(--green); background: rgba(110, 231, 90, 0.1); }
+.qx-dest { width: 100%; font-size: 10px; color: var(--muted); line-height: 1.4; }
+.qx-dest b { color: var(--green); font-weight: 700; }
+.qx-count { padding: 0 10px 4px; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.qx-list { flex: 1; min-height: 120px; overflow-y: auto; padding: 0 6px; display: flex; flex-direction: column; gap: 2px; }
+.qx-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; flex-shrink: 0; }
+.qx-row:hover { background: rgba(255,255,255,0.05); }
+.qx-row.selected { background: rgba(110, 231, 90, 0.12); border-color: var(--green); }
+.qx-meta { min-width: 0; flex: 1; }
+.qx-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qx-id { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
+.qx-empty { padding: 20px 10px; text-align: center; font-size: 11px; color: var(--muted); }
+.qx-selection { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--border-light); font-size: 11px; flex-shrink: 0; }
+.qx-selection span { flex: 1; color: var(--green); font-weight: 700; }
+.qx-selection button { padding: 4px 8px; font-size: 10px; }
+.qx-scan { padding: 8px; border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; max-height: 40%; overflow-y: auto; }
+.qx-scan-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.qx-bar { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+.qx-bar div { height: 100%; background: var(--green); transition: width 0.2s; }
+.qx-note { font-size: 10px; color: var(--muted); line-height: 1.4; }
+.qx-details summary { cursor: pointer; font-size: 10px; color: var(--muted); }
+.qx-mod { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; padding: 2px 0; color: var(--muted); }
+.qx-mod span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qx-mod.ready span:last-child { color: var(--green); }
+.qx-mod.failed span:last-child { color: #ff4466; }
+.item-icon { image-rendering: pixelated; object-fit: contain; flex-shrink: 0; vertical-align: middle; }
+.item-icon.ph { display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); border-radius: 3px; color: var(--muted); font-weight: 700; }
+.item-icon.missing { background: rgba(255,255,255,0.06); border-radius: 3px; }

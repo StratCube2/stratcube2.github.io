@@ -34,7 +34,7 @@
       <button class="activity-tab" data-target="panel-addons" title="Addons">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
       </button>
-      <button class="activity-tab" data-target="panel-quests" title="Quest Mods">
+      <button class="activity-tab" data-target="panel-quests" title="Quest Items">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
@@ -172,11 +172,27 @@
       </div>
 
       <div id="panel-quests" class="sidebar-panel hidden">
-        <div class="panel-header">QUEST MODS</div>
-        <div class="input-group">
-          <input type="text" id="quest-mod-search" placeholder="Search stages...">
+        <div class="panel-header">QUEST ITEMS</div>
+        <div class="qx-top">
+          <input type="text" id="qx-search" placeholder="Search items…" autocomplete="off">
+          <div class="qx-seg" id="qx-kind">
+            <button data-kind="item" class="active">Items</button>
+            <button data-kind="entity">Mobs</button>
+          </div>
+          <select id="qx-mod" title="Filter by mod"><option value="">All mods</option></select>
         </div>
-        <div id="quest-mods-list" class="flex-col gap-2 p-2" style="flex:1; overflow-y:auto;"></div>
+        <div class="qx-target">
+          <div class="qx-seg" id="qx-as">
+            <button data-as="task" class="active">Task</button>
+            <button data-as="reward">Reward</button>
+          </div>
+          <button id="qx-multi" class="qx-toggle" title="Tap several, then add them together">Multi-select</button>
+          <div id="qx-dest" class="qx-dest"></div>
+        </div>
+        <div id="qx-count" class="qx-count"></div>
+        <div id="qx-list" class="qx-list"></div>
+        <div id="qx-selection" class="qx-selection hidden"></div>
+        <div id="qx-scan" class="qx-scan"></div>
       </div>
       <div id="panel-pack-tools" class="sidebar-panel hidden">
         <div class="panel-header">PACK TOOLS</div>

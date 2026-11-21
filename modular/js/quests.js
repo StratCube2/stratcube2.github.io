@@ -1,33 +1,27 @@
-import { state, questState, saveQuestState } from './state.js';
-import { newId, escapeHtml, shortName, TASK_ICONS, debounce } from './utils.js';
+import { questState, saveQuestState } from './state.js';
+import { newId, escapeHtml, TASK_ICONS } from './utils.js';
+import { initExplorer, renderTarget } from './quest-explorer.js';
+import { getEntry, displayName, iconHtml, onRegistryChange } from './itemdb.js';
 
 export async function initQuests() {
-  await loadQuestData();
   bindQuestUI();
+  initExplorer({ addToQuest: addEntriesToQuest });
+  // Item names and icons arrive after a mod scan finishes, so redraw whatever shows them.
+  onRegistryChange(() => { renderQuestCanvas(); renderQuestEditor(); });
 }
 
 export function triggerQuestRenders() {
   renderQuestChapters();
-  renderQuestMods();
+  renderTarget();
   renderQuestCanvas();
   renderQuestEditor();
 }
 
-async function loadQuestData() {
-  try {
-    const res = await fetch('mods.json');
-    if (!res.ok) throw new Error("Failed to load mods.json");
-    questState.modsData = await res.json();
-  } catch(e) {
-    console.error("Failed to load mods.json for quests", e);
-  }
-}
+/** The item or mob a task/reward refers to, if it's one the explorer knows about. */
+const entryForTask = t => t.taskType === 'checkmark' ? null : getEntry(t.taskType === 'kill' ? 'entity' : 'item', t.item);
+const entryForReward = r => r.rewardType === 'item' ? getEntry('item', r.item) : null;
 
 function bindQuestUI() {
-  // Debounce the search to prevent UI lag on rapid typing
-  const debouncedSearch = debounce(renderQuestMods, 250);
-  document.getElementById('quest-mod-search').addEventListener('input', debouncedSearch);
-  
   document.getElementById('btn-link-dep').addEventListener('click', () => {
     if(questState.selectedQuestId) {
       questState.linkSource = questState.selectedQuestId;
@@ -170,98 +164,66 @@ function bindQuestUI() {
   document.getElementById('btn-add-quest').addEventListener('click', () => addQuest());
 }
 
-function addQuest(title = 'New Quest', tasks = []) {
+function addQuest(title = 'New Quest', tasks = [], rewards = []) {
   const chapter = questState.chapters[questState.activeChapter];
-  if(!chapter) return;
+  if(!chapter) return null;
   const id = newId();
   const col = chapter.quests.length % 5;
   const row = Math.floor(chapter.quests.length / 5);
-  chapter.quests.push({
+  const quest = {
     id, title, subtitle: '', description: [],
     x: col * 2.5, y: row * 2.5,
-    shape: 'default', dependencies: [], tasks, rewards: []
-  });
+    shape: 'default', dependencies: [], tasks, rewards
+  };
+  chapter.quests.push(quest);
   questState.selectedQuestId = id;
   saveQuestState();
   renderQuestCanvas();
   renderQuestEditor();
+  return quest;
 }
 
-export function renderQuestMods() {
-  const container = document.getElementById('quest-mods-list');
-  if(!container) return;
-  container.innerHTML = '';
-  
-  const search = document.getElementById('quest-mod-search').value.toLowerCase();
-  const activeSlugs = new Set(state.mods.map(m => m.slug.toLowerCase()));
-  const activeTitles = new Set(state.mods.map(m => m.title.toLowerCase()));
-  
-  const availableMods = questState.modsData.filter(m => {
-    const modName = m.mod.toLowerCase();
-    const namespace = m.namespace.toLowerCase();
-    const isBase = namespace === 'minecraft';
-    const isActive = activeSlugs.has(namespace) || activeTitles.has(modName) || activeSlugs.has(modName);
-    
-    if (!isBase && !isActive) return false;
-    
-    if (search && !modName.includes(search) && !namespace.includes(search) && !Object.keys(m.progression).some(s => s.toLowerCase().includes(search))) {
-      return false;
+/**
+ * Adds items/mobs picked in the explorer to the selected quest, or to a new one.
+ * Picking the same thing twice bumps its count instead of adding a duplicate row.
+ */
+function addEntriesToQuest({ entries, as, newQuest }) {
+  const chapter = questState.chapters[questState.activeChapter];
+  if (!chapter || entries.length === 0) return { message: 'Nothing to add.' };
+
+  const tasks = [], rewards = [];
+  const bump = (list, make, entry) => {
+    const existing = list.find(x => x.item === entry.id && make.type === (x.taskType ?? x.rewardType));
+    if (existing) existing.count = (existing.count || 1) + 1;
+    else list.push({ id: newId(), item: entry.id, count: 1, ...make.fields });
+  };
+  for (const entry of entries) {
+    if (entry.kind === 'entity') bump(tasks, { type: 'kill', fields: { taskType: 'kill', sourceType: 'kill' } }, entry);
+    else if (as === 'reward') bump(rewards, { type: 'item', fields: { rewardType: 'item' } }, entry);
+    else bump(tasks, { type: 'item', fields: { taskType: 'item', sourceType: 'collect' } }, entry);
+  }
+
+  let quest = newQuest ? null : chapter.quests.find(q => q.id === questState.selectedQuestId);
+  if (quest) {
+    // Merge into the existing quest, reusing rows that already hold the same item.
+    for (const t of tasks) {
+      const same = quest.tasks.find(x => x.item === t.item && x.taskType === t.taskType);
+      if (same) same.count = (same.count || 1) + t.count; else quest.tasks.push(t);
     }
-    return true;
-  });
-  
-  const fragment = document.createDocumentFragment();
-  
-  availableMods.forEach(mod => {
-    const div = document.createElement('div');
-    div.style.marginBottom = '2px';
-    
-    const isOpen = questState.expandedMod === mod.namespace;
-    const safeModName = escapeHtml(mod.mod);
-    
-    div.innerHTML = `
-      <button class="quest-mod-btn" style="width:100%; display:flex; align-items:center; gap:6px; background:${isOpen ? 'rgba(255,255,255,0.05)' : 'transparent'}; border:none; border-radius:4px; padding:5px 6px; cursor:pointer; text-align:left;">
-        <span style="font-size:9px; font-weight:700; background:var(--green-dim); color:#fff; border-radius:3px; padding:1px 5px; flex-shrink:0;">${mod.difficulty_weight}</span>
-        <span style="color:${isOpen ? 'var(--green)' : 'var(--text)'}; font-size:11px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeModName}</span>
-        <span style="color:var(--muted); font-size:10px;">${isOpen ? '▲' : '▼'}</span>
-      </button>
-      ${isOpen ? `<div class="quest-mod-stages" style="padding-left:8px; padding-bottom:4px;"></div>` : ''}
-    `;
-    
-    div.querySelector('.quest-mod-btn').addEventListener('click', () => {
-      questState.expandedMod = isOpen ? null : mod.namespace;
-      renderQuestMods();
-    });
-    
-    if(isOpen) {
-      const stagesContainer = div.querySelector('.quest-mod-stages');
-      Object.entries(mod.progression).forEach(([stageName, stage]) => {
-        const stageBtn = document.createElement('button');
-        stageBtn.style.cssText = `width:100%; display:flex; flex-direction:column; align-items:flex-start; background:rgba(0,0,0,0.2); border:1px solid var(--border-light); border-radius:4px; padding:5px 8px; margin-bottom:2px; cursor:pointer; text-align:left;`;
-        
-        const safeStageName = escapeHtml(stageName);
-        const safeDesc = escapeHtml(stage.description);
-        
-        stageBtn.innerHTML = `
-          <span style="color:var(--green); font-size:11px; font-weight:600;">${safeStageName}</span>
-          <span style="color:var(--muted); font-size:10px;">${safeDesc}</span>
-          <span style="color:var(--muted); font-size:9px; margin-top:2px;">${stage.tasks.length} tasks</span>
-        `;
-        stageBtn.addEventListener('click', () => {
-          const tasks = stage.tasks.map(t => ({
-            id: newId(), item: t.item, count: 1,
-            taskType: t.type === 'kill' ? 'kill' : t.type === 'explore' ? 'checkmark' : 'item',
-            sourceType: t.type
-          }));
-          addQuest(stageName, tasks);
-        });
-        stagesContainer.appendChild(stageBtn);
-      });
+    for (const r of rewards) {
+      const same = quest.rewards.find(x => x.item === r.item && x.rewardType === r.rewardType);
+      if (same) same.count = (same.count || 1) + r.count; else quest.rewards.push(r);
     }
-    fragment.appendChild(div);
-  });
-  
-  container.appendChild(fragment);
+    saveQuestState();
+    renderQuestCanvas();
+    renderQuestEditor();
+  } else {
+    quest = addQuest(entries.length === 1 ? entries[0].name : 'New Quest', tasks, rewards);
+    if (!quest) return { message: 'No chapter to add to.' };
+  }
+
+  const what = entries.length === 1 ? entries[0].name : `${entries.length} entries`;
+  return { message: `Added ${what} to "${quest.title}".` };
 }
 
 export function renderQuestChapters() {
@@ -417,8 +379,10 @@ export function renderQuestCanvas() {
     
     let taskHtml = '';
     quest.tasks.slice(0,4).forEach(t => {
-      const icon = TASK_ICONS[t.sourceType || t.taskType] || '';
-      taskHtml += `<span style="font-size:9px; background:#1e293b; border-radius:3px; padding:1px 5px; color:#94a3b8; border:1px solid #37415133; margin:1px;">${icon}${escapeHtml(shortName(t.item))}</span>`;
+      const entry = entryForTask(t);
+      const label = t.taskType === 'checkmark' ? t.item : displayName(t.taskType === 'kill' ? 'entity' : 'item', t.item);
+      const icon = (entry && t.taskType !== 'kill') ? iconHtml(entry, 14) + ' ' : (TASK_ICONS[t.sourceType || t.taskType] || '');
+      taskHtml += `<span style="font-size:9px; background:#1e293b; border-radius:3px; padding:1px 5px; color:#94a3b8; border:1px solid #37415133; margin:1px; display:inline-flex; align-items:center; gap:3px;">${icon}${escapeHtml(String(label).slice(0, 22))}</span>`;
     });
     if(quest.tasks.length > 4) taskHtml += `<span style="font-size:9px; color:#64748b;">+${quest.tasks.length-4}</span>`;
     if(quest.tasks.length === 0) taskHtml += `<span style="font-size:9px; color:#374151; font-style:italic;">no tasks</span>`;
@@ -477,6 +441,7 @@ export function renderQuestCanvas() {
 }
 
 export function renderQuestEditor() {
+  renderTarget();
   const container = document.getElementById('quest-editor-container');
   if(!container) return;
   
@@ -585,7 +550,8 @@ export function renderQuestEditor() {
     div.style.cssText = "display:flex; gap:4px; margin-bottom:4px; align-items:center;";
     div.innerHTML = `
       <span style="font-size:10px; color:var(--muted); width:40px; overflow:hidden;">${escapeHtml(t.taskType)}</span>
-      <input type="text" value="${escapeHtml(t.item)}" class="qe-task-item" data-id="${t.id}" style="flex:1;">
+      ${t.taskType === 'checkmark' ? '' : iconHtml(entryForTask(t), 20)}
+      <input type="text" value="${escapeHtml(t.item)}" class="qe-task-item" data-id="${t.id}" title="${escapeHtml(t.taskType === 'checkmark' ? t.item : displayName(t.taskType === 'kill' ? 'entity' : 'item', t.item))}" style="flex:1; min-width:0;">
       <input type="number" value="${t.count || 1}" class="qe-task-count" data-id="${t.id}" style="width:40px;" ${t.taskType === 'checkmark' ? 'disabled' : ''}>
       <button class="btn-del-task icon-btn" data-id="${t.id}" style="color:#ff4466; font-size:14px;">×</button>
     `;
@@ -598,7 +564,8 @@ export function renderQuestEditor() {
     div.style.cssText = "display:flex; gap:4px; margin-bottom:4px; align-items:center;";
     div.innerHTML = `
       <span style="font-size:10px; color:var(--muted); width:40px; overflow:hidden;">${escapeHtml(r.rewardType)}</span>
-      <input type="text" value="${escapeHtml(r.item)}" class="qe-reward-item" data-id="${r.id}" style="flex:1;">
+      ${r.rewardType === 'item' ? iconHtml(entryForReward(r), 20) : ''}
+      <input type="text" value="${escapeHtml(r.item)}" class="qe-reward-item" data-id="${r.id}" title="${escapeHtml(r.rewardType === 'item' ? displayName('item', r.item) : r.item)}" style="flex:1; min-width:0;">
       <input type="number" value="${r.count || 1}" class="qe-reward-count" data-id="${r.id}" style="width:40px;" ${r.rewardType === 'command' ? 'disabled' : ''}>
       <button class="btn-del-reward icon-btn" data-id="${r.id}" style="color:#ff4466; font-size:14px;">×</button>
     `;
