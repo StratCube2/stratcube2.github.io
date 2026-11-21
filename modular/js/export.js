@@ -1,5 +1,7 @@
 import { state, questState, customFiles } from './state.js';
 import { buildQuestFiles } from './quest-io.js';
+import { writeOverrides } from './overrides.js';
+import { buildPackToolFiles } from './packtools.js';
 
 export async function exportQuestsZip() {
   if (!window.JSZip || !window.saveAs) return alert("Export libraries failed to load.");
@@ -86,6 +88,10 @@ export async function exportMrPack() {
     });
 
     zip.file("modrinth.index.json", JSON.stringify(indexJson, null, 2));
+
+    // Files carried over from an imported pack go in first, so generated files below win on conflict.
+    writeOverrides(zip);
+    Object.entries(buildPackToolFiles()).forEach(([path, text]) => zip.file(path, text));
 
     // Bundle quests into the pack's overrides
     if (questState.chapters.some(c => c.quests.length > 0)) {

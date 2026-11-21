@@ -40,6 +40,9 @@
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
         </svg>
       </button>
+      <button class="activity-tab" data-target="panel-pack-tools" title="Pack Tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+      </button>
     </nav>
 
     <aside id="left-sidebar">
@@ -175,6 +178,50 @@
         </div>
         <div id="quest-mods-list" class="flex-col gap-2 p-2" style="flex:1; overflow-y:auto;"></div>
       </div>
+      <div id="panel-pack-tools" class="sidebar-panel hidden">
+        <div class="panel-header">PACK TOOLS</div>
+        <div id="pack-tools-scroll">
+
+          <div class="tool-accordion">
+            <button class="tool-accordion-header" data-target="body-ysns">
+              <span>Mob Spawn Control (You Shall Not Spawn)</span><span class="tool-arrow">▼</span>
+            </button>
+            <div id="body-ysns" class="tool-accordion-body hidden">
+              <p class="tool-note">Writes <code>config/ysns/</code> files into the pack. Needs the <b>You Shall Not Spawn</b> mod.</p>
+
+              <label class="tool-label">Disabled everywhere</label>
+              <div class="tool-row">
+                <input type="text" id="ysns-disabled-input" placeholder="minecraft:zombie or !regex">
+                <button id="btn-ysns-disabled-add" class="btn-primary">Add</button>
+              </div>
+              <div id="ysns-disabled-list" class="tool-list"></div>
+
+              <label class="tool-label">Per-dimension spawn chance</label>
+              <input type="text" id="ysns-dim-entity" placeholder="Entity (minecraft:creeper or !regex)">
+              <input type="text" id="ysns-dim-dimension" placeholder="Dimension (minecraft:overworld or !regex)">
+              <div class="tool-row">
+                <input type="number" id="ysns-dim-chance" min="0" max="1" step="0.05" value="0.5" title="0.0 = never, 1.0 = unchanged">
+                <button id="btn-ysns-dim-add" class="btn-primary">Add rule</button>
+              </div>
+              <div id="ysns-dim-list" class="tool-list"></div>
+              <p class="tool-note">Chance 0 blocks the spawn, 1 leaves it unchanged. This mod can't raise spawn rates.</p>
+            </div>
+          </div>
+
+          <div class="tool-accordion">
+            <button class="tool-accordion-header" data-target="body-imported">
+              <span>Imported Files <span id="imported-count"></span></span><span class="tool-arrow">▼</span>
+            </button>
+            <div id="body-imported" class="tool-accordion-body hidden">
+              <p class="tool-note">Configs, scripts and other files carried over from an imported .mrpack. They're written back on export. Kept for this session only.</p>
+              <div id="imported-list" class="tool-list"></div>
+              <button id="btn-imported-clear" class="btn-primary w-full">Remove all</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </aside>
 
     <main id="center-panel">

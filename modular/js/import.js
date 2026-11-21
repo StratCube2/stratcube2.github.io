@@ -1,4 +1,6 @@
 import { state, questState, saveState, saveQuestState, clearCustomFiles, setCustomFile } from './state.js';
+import { OVERRIDE_ROOTS, isPassthroughPath, setOverride, clearOverrides, overrideCount } from './overrides.js';
+import { isPackToolPath, readPackTools, resetPackTools, packToolsRuleCount } from './packtools.js';
 import { newId } from './utils.js';
 import { lookupVersionsByHash, fetchProjects, primaryCategory } from './api.js';
 import { parseQuestChapters, isChapterPath, describeQuestImport } from './quest-io.js';
@@ -135,8 +137,11 @@ export async function importMrPack(file) {
   const questResult = questEntries.length ? parseQuestChapters(questEntries) : null;
   const importedQuests = questResult && questResult.chapters.length > 0;
   const jars = zip.file(/^overrides\/mods\/[^/]+\.jar$/i);
+  // Everything else under overrides/ (configs, scripts, datapacks, ...) is carried through as-is.
+  const extraEntries = zip.file(OVERRIDE_ROOTS).filter(e => isPassthroughPath(e.name));
 
-  if ((state.mods.length > 0 || (importedQuests && hasQuests()))
+  const replacingPackData = overrideCount() > 0 || packToolsRuleCount() > 0;
+  if ((state.mods.length > 0 || replacingPackData || (importedQuests && hasQuests()))
       && !confirm(`Importing "${settings.name}" replaces your current mods${importedQuests ? ' and quests' : ''}. Continue?`)) {
     return null;
   }
@@ -154,6 +159,14 @@ export async function importMrPack(file) {
       mods.push({ id, slug: filename, title: filename, category: 'Custom', custom: true });
     }
 
+    // Files the Pack Tools panel understands are loaded into it; the rest are kept as plain files.
+    resetPackTools();
+    const toolEntries = await Promise.all(extraEntries.filter(e => isPackToolPath(e.name))
+      .map(async e => ({ path: e.name, text: await e.async('string') })));
+    const tools = readPackTools(toolEntries);
+    clearOverrides();
+    extraEntries.filter(e => !tools.claimed.has(e.name)).forEach(e => setOverride(e.name, e));
+
     Object.assign(state, settings, {
       mods,
       sinytraEnabled: CONNECTOR_LOADERS.has(settings.loader) && mods.some(m => m.slug === 'connector')
@@ -164,6 +177,8 @@ export async function importMrPack(file) {
     const parts = [`Imported "${settings.name}": ${mods.length} mods`];
     if (jars.length) parts.push(`${jars.length} bundled jar${jars.length === 1 ? '' : 's'} (kept for this session only)`);
     if (importedQuests) parts.push(describeQuestImport(questResult));
+    if (overrideCount()) parts.push(`${overrideCount()} config/other file${overrideCount() === 1 ? '' : 's'} carried over (kept for this session only)`);
+    parts.push(...tools.summary);
     if (lookupFailed) parts.push('Modrinth lookup failed, so mods are listed by filename');
     return parts.join(' · ') + '.';
   } finally {

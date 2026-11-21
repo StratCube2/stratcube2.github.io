@@ -5,6 +5,7 @@ import { debounce } from './utils.js';
 import { initQuests, triggerQuestRenders } from './quests.js';
 import { exportMrPack, exportQuestsZip } from './export.js';
 import { importMrPack, importQuests } from './import.js';
+import { initPackTools, renderPackTools } from './packtools-ui.js';
 
 document.addEventListener("DOMContentLoaded", async () => {
   loadState();
@@ -16,12 +17,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderModList();
     refreshSearchResults();
     refreshAddons(); // re-checks addon availability when version/loader/Sinytra changed
+    renderPackTools();
   });
   
   bindNavigation();
   bindFormInputs();
   bindExportButtons();
   bindImportButtons();
+  initPackTools();
   
   await populateGameVersions();
   updateSinytraVisibility();

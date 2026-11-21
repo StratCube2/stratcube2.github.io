@@ -1,12 +1,36 @@
 import { newId } from './utils.js';
 
+/** Settings for the Pack Tools panel. Exported into the pack as config files. */
+export const createPackTools = () => ({
+  ysns: { disabled: [], dimensions: [] } // You Shall Not Spawn
+});
+
+/** Fills in anything missing so saves from older versions (or bad data) can't break the panel. */
+export function normalizePackTools(raw) {
+  const tools = createPackTools();
+  const ysns = raw?.ysns;
+  if (Array.isArray(ysns?.disabled)) {
+    tools.ysns.disabled = ysns.disabled.filter(e => typeof e === 'string' && e.trim()).map(e => e.trim());
+  }
+  if (Array.isArray(ysns?.dimensions)) {
+    tools.ysns.dimensions = ysns.dimensions.flatMap(r => {
+      const entity = r?.entity ?? r?.entityId; // older saves used "entityId"
+      const chance = Number(r?.spawn_chance);
+      if (typeof entity !== 'string' || typeof r?.dimension !== 'string' || !Number.isFinite(chance)) return [];
+      return [{ entity, dimension: r.dimension, spawn_chance: chance }];
+    });
+  }
+  return tools;
+}
+
 export const state = {
   name: "My Modpack",
   mcVersion: "",
   loader: "fabric",
   loaderVersion: "",
   sinytraEnabled: false,
-  mods: []
+  mods: [],
+  packTools: createPackTools()
 };
 
 export let customFiles = [];
@@ -37,7 +61,7 @@ export function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     const parsed = JSON.parse(saved);
-    Object.assign(state, parsed, { mods: parsed.mods || [] });
+    Object.assign(state, parsed, { mods: parsed.mods || [], packTools: normalizePackTools(parsed.packTools) });
   }
 }
 

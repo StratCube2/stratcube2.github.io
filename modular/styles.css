@@ -284,3 +284,27 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 @keyframes spin { to { transform: rotate(360deg); } }
 .progress-bar-bg { height: 4px; margin-top: 10px; background: var(--border-light); border-radius: 2px; overflow: hidden; }
 #progress-bar-fill { height: 100%; width: 100%; background: var(--green); }
+
+/* Pack Tools */
+#pack-tools-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.tool-accordion { border: 1px solid var(--border-light); border-radius: 6px; background: rgba(255,255,255,0.02); overflow: hidden; flex-shrink: 0; }
+.tool-accordion-header {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left;
+  background: rgba(0,0,0,0.3); border: none; padding: 10px 12px; color: var(--text);
+  font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+}
+.tool-accordion-header:hover { background: rgba(110, 231, 90, 0.1); }
+.tool-accordion-header.active { color: var(--green); border-bottom: 1px solid var(--border-light); }
+.tool-accordion-body { padding: 10px; background: var(--bg); display: flex; flex-direction: column; gap: 8px; }
+.tool-arrow { font-size: 9px; transition: transform 0.2s; }
+.tool-accordion-header.active .tool-arrow { transform: rotate(180deg); }
+.tool-note { margin: 0; font-size: 10px; color: var(--muted); line-height: 1.4; }
+.tool-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+.tool-row { display: flex; gap: 6px; }
+.tool-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.tool-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 4px 8px; font-size: 11px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); border-radius: 4px;
+}
+.tool-item span { overflow-wrap: anywhere; min-width: 0; }
+.tool-item button { background: none; border: none; color: #ff4466; cursor: pointer; font-family: inherit; flex-shrink: 0; }
