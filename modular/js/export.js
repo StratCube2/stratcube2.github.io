@@ -2,6 +2,7 @@ import { state, questState, customFiles } from './state.js';
 import { buildQuestFiles } from './quest-io.js';
 import { writeOverrides } from './overrides.js';
 import { buildPackToolFiles } from './packtools.js';
+import { generate, hasPaxi } from './datapack-io.js';
 
 export async function exportQuestsZip() {
   if (!window.JSZip || !window.saveAs) return alert("Export libraries failed to load.");
@@ -15,6 +16,13 @@ export async function exportQuestsZip() {
 export async function exportMrPack() {
   if (state.mods.length === 0) return alert("Add some mods first!");
   if (!window.JSZip || !window.saveAs) return alert("Export libraries failed to load.");
+
+  const datapack = generate();
+  const errors = datapack.issues.filter(i => i.level === 'error');
+  if (errors.length && !confirm(`${errors.length} datapack problem${errors.length === 1 ? '' : 's'} will leave things out of the export:\n\n` +
+      errors.slice(0, 6).map(e => `• ${e.where}: ${e.message}`).join('\n') + '\n\nExport anyway?')) return;
+  if (datapack.usesPaxi && !hasPaxi() &&
+      !confirm('Your datapack and resource pack are loaded by Paxi, which is not in this pack. Without it they will not load in game.\n\nExport anyway?')) return;
 
   const exportButtons = document.querySelectorAll('.btn-export:not(#btn-export-quests)');
   const resetButtons = () => {
@@ -91,6 +99,7 @@ export async function exportMrPack() {
 
     // Files carried over from an imported pack go in first, so generated files below win on conflict.
     writeOverrides(zip);
+    for (const [path, data] of datapack.overrides) zip.file(path, data, { binary: typeof data !== 'string' });
     Object.entries(buildPackToolFiles()).forEach(([path, text]) => zip.file(path, text));
 
     // Bundle quests into the pack's overrides

@@ -175,9 +175,9 @@ export async function importMrPack(file) {
     saveState();
 
     const parts = [`Imported "${settings.name}": ${mods.length} mods`];
-    if (jars.length) parts.push(`${jars.length} bundled jar${jars.length === 1 ? '' : 's'} (kept for this session only)`);
+    if (jars.length) parts.push(`${jars.length} bundled jar${jars.length === 1 ? '' : 's'}`);
     if (importedQuests) parts.push(describeQuestImport(questResult));
-    if (overrideCount()) parts.push(`${overrideCount()} config/other file${overrideCount() === 1 ? '' : 's'} carried over (kept for this session only)`);
+    if (overrideCount()) parts.push(`${overrideCount()} config/other file${overrideCount() === 1 ? '' : 's'} carried over`);
     parts.push(...tools.summary);
     if (lookupFailed) parts.push('Modrinth lookup failed, so mods are listed by filename');
     return parts.join(' · ') + '.';

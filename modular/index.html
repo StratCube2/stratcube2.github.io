@@ -229,7 +229,7 @@
               <span>Imported Files <span id="imported-count"></span></span><span class="tool-arrow">▼</span>
             </button>
             <div id="body-imported" class="tool-accordion-body hidden">
-              <p class="tool-note">Configs, scripts and other files carried over from an imported .mrpack. They're written back on export. Kept for this session only.</p>
+              <p class="tool-note">Configs, scripts and other files carried over from an imported .mrpack. They're written back on export and saved in this browser. The Datapack tab's Files view shows the same files with previews.</p>
               <div id="imported-list" class="tool-list"></div>
               <button id="btn-imported-clear" class="btn-primary w-full">Remove all</button>
             </div>
@@ -244,6 +244,7 @@
       <header id="center-tabs">
         <button class="center-tab active" data-target="tab-search">Search</button>
         <button class="center-tab" data-target="tab-quests">Quests (.snbt)</button>
+        <button class="center-tab" data-target="tab-datapack">Datapack</button>
       </header>
       
       <div id="center-content">
@@ -256,6 +257,10 @@
           <div id="search-pagination"></div>
         </div>
         
+        <div id="tab-datapack" class="tab-pane hidden" style="padding:0; overflow:hidden;">
+          <div id="datapack-root"></div>
+        </div>
+
         <div id="tab-quests" class="tab-pane hidden" style="padding:0; overflow:hidden; display:flex; flex-direction:column;">
           <div id="quest-topbar" style="display:flex; align-items:center; gap:8px; padding:8px; background:var(--panel-bg); border-bottom:1px solid var(--border); flex-shrink:0; overflow-x:auto;">
             <div id="quest-chapters-list" style="display:flex; gap:4px; flex:1;"></div>

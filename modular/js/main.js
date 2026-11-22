@@ -1,4 +1,8 @@
-import { state, loadState, saveState, onStateChange, addCustomFile, loadQuestState } from './state.js';
+import { state, loadState, saveState, onStateChange, addCustomFile, loadQuestState, hydrateCustomFiles } from './state.js';
+import { hydrateOverrides } from './overrides.js';
+import { requestPersistence } from './storage.js';
+import { hydrateTextures } from './datapack-io.js';
+import { initDatapack } from './datapack-ui.js';
 import { fetchGameVersions, resolveDependencies, buildModrinthMod } from './api.js';
 import { renderModList, executeSearch, renderAddons, refreshAddons, refreshSearchResults, toast } from './ui.js';
 import { debounce } from './utils.js';
@@ -10,6 +14,9 @@ import { initPackTools, renderPackTools } from './packtools-ui.js';
 document.addEventListener("DOMContentLoaded", async () => {
   loadState();
   loadQuestState();
+  // Imported files, custom jars and item textures saved by earlier sessions (IndexedDB).
+  await Promise.all([hydrateOverrides(), hydrateCustomFiles(), hydrateTextures()]);
+  requestPersistence();
   
   // Mod list changed: update the list and the "Added" buttons, but don't refetch
   // (that would reset the page and scroll position on every add/remove or keystroke).
@@ -30,6 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateSinytraVisibility();
 
   await initQuests();
+  initDatapack();
   await renderAddons(); 
   
   renderModList();
