@@ -5,7 +5,6 @@ The website of Strat.
 Modpack making tool with a bit too many features.
 Thanks to:
 - [Misode](https://misode.github.io/) for being de goat of datapacks
-- 
 
 ## Features
 ### Simple
