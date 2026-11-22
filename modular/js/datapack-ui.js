@@ -1,10 +1,10 @@
 // The "Datapack" tab: recipes, tags, loot tables, advancements, custom items, worldgen settings,
 // raw files, and a browser for every file the pack will carry. Edits mutate state.datapack and save;
 // the form only re-renders on structural changes (select, add, remove) so typing never loses focus.
-import { state, saveState } from './state.js';
+import { state, saveState, onStateChange } from './state.js';
 import { debounce, escapeHtml } from './utils.js';
 import { search, getEntry, iconHtml, displayName, hasModData } from './itemdb.js';
-import { buildModrinthMod } from './api.js';
+import { buildModrinthMod, fetchModrinthProjectData } from './api.js';
 import { toast } from './ui.js';
 import { openItemBrowser } from './item-browser.js';
 import {
@@ -370,10 +370,59 @@ async function addMod(slug, button_) {
   render();
 }
 
-function modChip(name, slug) {
-  const present = state.mods.some(m => m.slug === slug);
-  return el('span', { class: `dp-chip ${present ? 'ok' : 'missing'}` }, el('span', { text: `${present ? '✓' : '✗'} ${name}` }),
-    present ? null : el('button', { type: 'button', class: 'btn-primary', text: 'Add', onclick: e => addMod(slug, e.target) }));
+function removeMod(slug) {
+  state.mods = state.mods.filter(m => m.slug !== slug);
+  saveState();
+  render();
+}
+
+const FALLBACK_MOD_ICON = 'https://docs.modrinth.com/img/logo.svg';
+const modMetaCache = new Map();
+const modMetaPending = new Map();
+const formatCount = n => new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n || 0);
+
+function getModMeta(slug, onLoad) {
+  if (modMetaCache.has(slug)) return modMetaCache.get(slug);
+  if (!modMetaPending.has(slug)) {
+    modMetaPending.set(slug, fetchModrinthProjectData(slug)
+      .then(proj => { modMetaCache.set(slug, proj); onLoad?.(proj); })
+      .catch(() => {})
+      .finally(() => modMetaPending.delete(slug)));
+  }
+  return null;
+}
+
+function modOptionCard(m) {
+  const present = state.mods.some(x => x.slug === m.slug);
+  const icon = el('img', { class: 'mod-icon', src: FALLBACK_MOD_ICON, alt: `${m.name} icon` });
+  const stats = el('div', { class: 'mod-stats' });
+
+  const paintMeta = proj => {
+    if (proj?.icon_url) icon.src = proj.icon_url;
+    const parts = [];
+    if (proj) parts.push(`⬇ ${formatCount(proj.downloads)}`, `★ ${formatCount(proj.followers)}`);
+    if (m.note) parts.push(m.note);
+    stats.textContent = parts.join(' · ');
+  };
+
+  paintMeta(getModMeta(m.slug, paintMeta));
+
+  const action = present
+    ? el('button', { type: 'button', class: 'btn-primary dp-mod-remove', text: 'Remove', onclick: () => removeMod(m.slug) })
+    : el('button', { type: 'button', class: 'btn-primary', text: '+ Add', onclick: e => addMod(m.slug, e.target) });
+
+  return el('div', { class: `dp-mod-card${present ? ' active' : ''}` },
+    icon,
+    el('div', { class: 'mod-info' },
+      el('h4', {},
+        el('span', { text: m.name }),
+        m.role ? el('span', { class: 'dp-mod-role', text: m.role }) : null,
+        present ? el('span', { class: 'dp-mod-badge', text: '✓ In pack' }) : null),
+      el('p', { text: m.description || '' }),
+      stats),
+    el('div', { class: 'dp-mod-actions' },
+      action,
+      m.url ? el('a', { class: 'dp-mod-link', href: m.url, target: '_blank', rel: 'noopener noreferrer', text: 'Modrinth ↗' }) : null));
 }
 
 const WG_GROUPS = {
@@ -456,8 +505,11 @@ function renderWorldgen() {
     button('Reset all', () => { if (!Object.keys(d.tectonic).length || !confirm('Reset every Tectonic option to its default?')) return; d.tectonic = {}; save(); render(); }));
 
   const out = el('div', { class: 'dp-form dp-wide' },
-    el('div', { class: 'dp-chips' }, el('span', { class: 'tool-note', text: `Minecraft ${state.mcVersion} · ${profile.label}` }), ...profile.mods.map(m => modChip(m.name, m.slug))),
-    el('p', { class: 'tool-note', text: 'Only options you change are written, to config/tectonic.json. Tectonic fills in the rest the first time it loads. For changes to the terrain itself, use a raw file below.' }),
+    el('div', { class: 'dp-wg-head' },
+      el('strong', { text: 'Worldgen Mods' }),
+      el('span', { class: 'tool-note', text: `Minecraft ${state.mcVersion} · ${profile.label}` })),
+    el('div', { class: 'dp-wg-mods' }, ...profile.mods.map(modOptionCard)),
+    el('p', { class: 'tool-note', text: 'Only Tectonic options you change are written, to config/tectonic.json. Tectonic fills in the rest the first time it loads. For changes to the terrain itself, use a raw file below.' }),
     bar, ...[...groups.values()].map(g => g.details),
     renderRaw());
   refresh(); applyFilter();
@@ -590,6 +642,7 @@ export function render() {
 
 export function initDatapack() {
   onOverridesChange(() => { if (ui.section === 'files' && document.getElementById('tab-datapack')?.classList.contains('active')) render(); });
+  onStateChange(() => { if (ui.section === 'worldgen' && document.getElementById('tab-datapack')?.classList.contains('active')) render(); });
   document.querySelector('.center-tab[data-target="tab-datapack"]')?.addEventListener('click', render);
   render();
 }

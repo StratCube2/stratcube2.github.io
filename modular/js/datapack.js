@@ -52,12 +52,38 @@ export function mcRules(version) {
 export const WORLDGEN_PROFILES = {
   '1.20.1': {
     label: 'Terralith 2.5.4 + Tectonic (5373b2)',
-    mods: [{ name: 'Terralith', slug: 'terralith' }, { name: 'Tectonic', slug: 'tectonic' }],
+    mods: [
+      {
+        name: 'Terralith',
+        slug: 'terralith',
+        role: 'Biomes & Caves',
+        description: 'Overhauls the Overworld with 95+ biomes, new caves, and dramatic landmarks using vanilla blocks.',
+        note: 'Optional · Datapack/mod',
+        url: 'https://modrinth.com/mod/terralith'
+      },
+      {
+        name: 'Tectonic',
+        slug: 'tectonic',
+        role: 'Terrain & Height',
+        description: 'Adds towering mountain ranges, deep oceans, underground rivers, and smooth continental terrain.',
+        note: 'Configurable below',
+        url: 'https://modrinth.com/mod/tectonic'
+      }
+    ],
     rewrite: false
   },
   '1.21.1': {
     label: 'Tectonic rewrite squared',
-    mods: [{ name: 'Tectonic', slug: 'tectonic' }],
+    mods: [
+      {
+        name: 'Tectonic',
+        slug: 'tectonic',
+        role: 'Terrain & Height',
+        description: 'Rebuilt terrain engine with smoother continents, deeper oceans, configurable elevation, and ore fixes.',
+        note: 'Configurable below',
+        url: 'https://modrinth.com/mod/tectonic'
+      }
+    ],
     rewrite: true
   }
 };
