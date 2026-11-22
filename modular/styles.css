@@ -370,7 +370,33 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 .dp-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .dp-label { font-size: 10px; color: var(--muted); text-transform: uppercase; }
 .dp-form input[type=text], .dp-form input[type=number], .dp-form input[type=search], .dp-form select, .dp-form textarea, .dp-content input[type=search] { width: 100%; box-sizing: border-box; min-height: 34px; }
-.dp-form textarea { font-family: monospace; font-size: 12px; }
+.dp-content, .dp-head, .dp-status, .ib-modal { color-scheme: dark; font-family: var(--font-mono); }
+.dp-content button, .dp-content input, .dp-content select, .dp-content textarea, .dp-head input, .ib-modal input, .ib-modal select, .ib-modal button { font-family: inherit; }
+/* Controls the global rules don't cover (textarea, search, file) use the same dark theme */
+.dp-content textarea, .dp-content input[type="search"], .ib-modal input[type="search"] {
+  background: var(--bg); border: 1px solid var(--border-light); color: var(--text); padding: 6px 8px;
+  font-family: inherit; font-size: 12px; border-radius: 4px; outline: none; resize: vertical;
+}
+.dp-content textarea:focus, .dp-content input[type="search"]:focus { border-color: var(--green); }
+.dp-content textarea::placeholder, .dp-content input::placeholder { color: var(--muted); opacity: 0.7; }
+.dp-content input[type="file"] { color: var(--muted); font-family: inherit; font-size: 11px; max-width: 100%; }
+.dp-content input[type="file"]::file-selector-button {
+  background: transparent; border: 1px solid var(--green); color: var(--green); border-radius: 4px;
+  padding: 5px 10px; margin-right: 8px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+}
+.dp-content input[type="checkbox"] { accent-color: var(--green); }
+.dp-browse { background: transparent; border: 1px solid var(--border-light); color: var(--green); border-radius: 4px; min-width: 34px; min-height: 34px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+.dp-browse:hover { border-color: var(--green); }
+.dp-picker input { min-width: 0; }
+
+/* Item browser dialog */
+.ib-overlay { position: fixed; inset: 0; z-index: 900; background: rgba(0, 0, 0, 0.7); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.ib-modal { width: min(560px, 100%); height: min(680px, 100%); display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--green); border-radius: 8px; overflow: hidden; }
+.ib-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border-light); color: var(--green); }
+.ib-controls { display: flex; gap: 6px; padding: 8px; flex-shrink: 0; }
+.ib-controls .ib-search { flex: 1; min-width: 0; }
+.ib-controls .ib-mod { max-width: 45%; }
+.ib-list { padding-bottom: 6px; }
 .dp-row { display: flex; gap: 6px; align-items: flex-end; flex-wrap: wrap; }
 .dp-row > * { min-width: 0; }
 .dp-card { border: 1px solid var(--border-light); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }

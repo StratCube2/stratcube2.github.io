@@ -6,6 +6,7 @@ import { debounce, escapeHtml } from './utils.js';
 import { search, getEntry, iconHtml, displayName, hasModData } from './itemdb.js';
 import { buildModrinthMod } from './api.js';
 import { toast } from './ui.js';
+import { openItemBrowser } from './item-browser.js';
 import {
   RECIPE_TYPES, TAG_KINDS, LOOT_TYPES, FRAMES, WORLDGEN_PROFILES, worldgenProfile, tectonicOptionsFor,
   datapackContentCount, isValidId, qualify, PAXI_SLUG, mcRules
@@ -69,14 +70,19 @@ const removeBtn = onclick => el('button', { type: 'button', class: 'dp-x', title
 // ---------------------------------------------------------------------------
 
 function itemPicker({ value, onChange, allowTag = false, placeholder = 'minecraft:stone', compact = false, kind = 'item' }) {
+  const dbKind = kind === 'entity_type' ? 'entity' : 'item'; // itemdb only knows items and mobs
   const icon = el('span', { class: 'dp-icon' });
   const input = el('input', { type: 'text', value: value || '', placeholder, spellcheck: 'false', autocomplete: 'off' });
   const menu = el('div', { class: 'dp-suggest hidden' });
-  const wrap = el('div', { class: `dp-picker${compact ? ' compact' : ''}` }, icon, input, menu);
+  const browse = el('button', {
+    type: 'button', class: 'dp-browse', title: 'Browse all items', text: '⌕',
+    onclick: async () => { const picked = await openItemBrowser({ kind: dbKind }); if (picked) commit(picked); }
+  });
+  const wrap = el('div', { class: `dp-picker${compact ? ' compact' : ''}` }, icon, input, browse, menu);
 
   const paintIcon = () => {
     const id = input.value.trim();
-    const entry = id && !id.startsWith('#') ? getEntry(kind, id) : null;
+    const entry = id && !id.startsWith('#') ? getEntry(dbKind, id) : null;
     icon.innerHTML = entry ? iconHtml(entry, 20) : '';
   };
   const commit = v => { input.value = v; paintIcon(); menu.classList.add('hidden'); onChange(v); };
@@ -84,7 +90,7 @@ function itemPicker({ value, onChange, allowTag = false, placeholder = 'minecraf
   const showMenu = () => {
     const q = input.value.trim().replace(/^#/, '');
     if ((allowTag && input.value.trim().startsWith('#')) || !q) { menu.classList.add('hidden'); return; }
-    const hits = search({ kind, query: q.includes(':') ? q.split(':').pop() : q }).slice(0, 30);
+    const hits = search({ kind: dbKind, query: q.includes(':') ? q.split(':').pop() : q }).slice(0, 30);
     if (!hits.length) { menu.classList.add('hidden'); return; }
     menu.replaceChildren(...hits.map(h => {
       const row = el('div', { class: 'dp-suggest-row' });
@@ -205,7 +211,7 @@ function renderItems() {
       const preview = el('div', { class: 'dp-texture' });
       const paintTexture = () => {
         const blob = textureCache.get(item.id);
-        preview.replaceChildren(
+        preview.replaceChildren(...[
           blob ? el('img', { src: URL.createObjectURL(blob), alt: 'texture', class: 'dp-texture-img' }) : el('span', { class: 'tool-note', text: 'No texture yet.' }),
           el('input', {
             type: 'file', accept: 'image/png', onchange: async e => {
@@ -216,7 +222,8 @@ function renderItems() {
               await saveTexture(item.id, file); item.hasTexture = true; save(); paintTexture();
             }
           }),
-          blob ? button('Remove texture', async () => { await removeTexture(item.id); item.hasTexture = false; save(); paintTexture(); }) : null);
+          blob ? button('Remove texture', async () => { await removeTexture(item.id); item.hasTexture = false; save(); paintTexture(); }) : null
+        ].filter(Boolean));
       };
       paintTexture();
       return el('div', {},
@@ -244,7 +251,7 @@ function stringList(values, { allowTag, onChange, kind }) {
   const box = el('div', { class: 'dp-stack-col' });
   const paint = () => box.replaceChildren(
     ...values.map((v, i) => el('div', { class: 'dp-row' },
-      kind === 'item' || kind === 'block' || kind === 'fluid' ? itemPicker({ value: v, allowTag, onChange: x => { values[i] = x; onChange(); } })
+      kind === 'item' || kind === 'block' || kind === 'fluid' || kind === 'entity_type' ? itemPicker({ kind, value: v, allowTag, onChange: x => { values[i] = x; onChange(); } })
         : textInput(v, x => { values[i] = x.trim(); onChange(); }, { placeholder: kind === 'entity_type' ? 'minecraft:zombie' : 'minecraft:plains' }),
       removeBtn(() => { values.splice(i, 1); onChange(); paint(); }))),
     button('+ Value', () => { values.push(''); paint(); }));
