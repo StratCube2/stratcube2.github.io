@@ -272,12 +272,14 @@
             <button id="btn-export-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;">⬇ Export Quests</button>
           </div>
           
-          <div id="quest-canvas-container" style="flex:1; position:relative; overflow:hidden; background:#0a0a0a; user-select:none; cursor:default;">
-            <div style="position:absolute; top:8px; right:8px; z-index:10; display:flex; gap:6px;" id="quest-status-bar"></div>
+          <div id="quest-canvas-container">
+            <div style="position:absolute; top:8px; right:8px; z-index:10; display:flex; gap:6px; pointer-events:none;" id="quest-status-bar"></div>
+            <div id="quest-empty" class="hidden"><div style="font-size:40px;">📜</div><div>No quests in this chapter.<br>Tap <b>+ Quest</b> to add one.</div></div>
             <div style="position:absolute; top:8px; left:8px; z-index:10; display:flex; gap:4px;">
               <button class="btn-primary" id="btn-zoom-in" style="padding:2px 8px;">+</button>
               <button class="btn-primary" id="btn-zoom-out" style="padding:2px 8px;">-</button>
-              <button class="btn-primary" id="btn-zoom-reset" style="padding:2px 8px;">⟳</button>
+              <button class="btn-primary" id="btn-zoom-reset" title="Reset zoom" style="padding:2px 8px;">⟳</button>
+              <button class="btn-primary" id="btn-zoom-fit" title="Fit all quests" style="padding:2px 8px;">⤢</button>
             </div>
             
             <div id="quest-canvas-inner" style="transform-origin: 0 0; position:relative; width:4000px; height:4000px;">

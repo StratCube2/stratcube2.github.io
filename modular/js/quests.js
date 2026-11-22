@@ -1,13 +1,29 @@
 import { questState, saveQuestState } from './state.js';
-import { newId, escapeHtml, TASK_ICONS } from './utils.js';
+import { newId, escapeHtml, debounce, TASK_ICONS } from './utils.js';
 import { initExplorer, renderTarget } from './quest-explorer.js';
 import { getEntry, displayName, iconHtml, onRegistryChange } from './itemdb.js';
+import { toast } from './ui.js';
+
+const GRID = 80;                       // px per quest-map unit
+const NODE_W = 150, NODE_H = 70;       // node box used for edge geometry
+const MIN_SCALE = 0.25, MAX_SCALE = 2.5;
+const DRAG_THRESHOLD = 6;              // px of movement before a tap becomes a drag/pan
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const currentChapter = () => questState.chapters[questState.activeChapter];
+const saveSoon = debounce(saveQuestState, 300);
+
+const nodeEls = new Map();             // quest id -> its DOM node (kept between renders)
+let shownChapterId = null;
 
 export async function initQuests() {
   bindQuestUI();
   initExplorer({ addToQuest: addEntriesToQuest });
   // Item names and icons arrive after a mod scan finishes, so redraw whatever shows them.
-  onRegistryChange(() => { renderQuestCanvas(); renderQuestEditor(); });
+  onRegistryChange(() => {
+    renderQuestCanvas();
+    if (!document.activeElement?.closest('#quest-editor-container')) renderQuestEditor();
+  });
 }
 
 export function triggerQuestRenders() {
@@ -21,163 +37,296 @@ export function triggerQuestRenders() {
 const entryForTask = t => t.taskType === 'checkmark' ? null : getEntry(t.taskType === 'kill' ? 'entity' : 'item', t.item);
 const entryForReward = r => r.rewardType === 'item' ? getEntry('item', r.item) : null;
 
-function bindQuestUI() {
-  document.getElementById('btn-link-dep').addEventListener('click', () => {
-    if(questState.selectedQuestId) {
-      questState.linkSource = questState.selectedQuestId;
-      renderQuestCanvas();
-    }
+// ---------------------------------------------------------------------------
+// View (pan / zoom)
+// ---------------------------------------------------------------------------
+
+function applyTransform() {
+  const inner = $('quest-canvas-inner');
+  if (inner) inner.style.transform = `translate(${questState.canvasOffset.x}px, ${questState.canvasOffset.y}px) scale(${questState.canvasScale})`;
+  const chip = $('qs-zoom');
+  if (chip) chip.textContent = Math.round(questState.canvasScale * 100) + '%';
+}
+
+/** Zooms to newScale keeping the point (cx, cy), in container pixels, fixed on screen. */
+function zoomAt(newScale, cx, cy) {
+  const s = clamp(newScale, MIN_SCALE, MAX_SCALE);
+  const k = s / questState.canvasScale;
+  questState.canvasOffset.x = cx - (cx - questState.canvasOffset.x) * k;
+  questState.canvasOffset.y = cy - (cy - questState.canvasOffset.y) * k;
+  questState.canvasScale = s;
+  applyTransform();
+}
+
+function zoomCenter(factor) {
+  const r = $('quest-canvas-container').getBoundingClientRect();
+  zoomAt(questState.canvasScale * factor, r.width / 2, r.height / 2);
+}
+
+function fitView() {
+  const chapter = currentChapter();
+  const box = $('quest-canvas-container').getBoundingClientRect();
+  if (!chapter || !chapter.quests.length) { questState.canvasScale = 1; questState.canvasOffset = { x: 60, y: 60 }; return applyTransform(); }
+  const xs = chapter.quests.map(q => q.x * GRID), ys = chapter.quests.map(q => q.y * GRID);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const w = Math.max(...xs) + NODE_W - minX, h = Math.max(...ys) + NODE_H - minY;
+  const pad = 48;
+  const s = clamp(Math.min((box.width - pad * 2) / w, (box.height - pad * 2) / h), MIN_SCALE, 1.5);
+  questState.canvasScale = s;
+  questState.canvasOffset = { x: (box.width - w * s) / 2 - minX * s, y: (box.height - h * s) / 2 - minY * s };
+  applyTransform();
+}
+
+// ---------------------------------------------------------------------------
+// Selection / linking
+// ---------------------------------------------------------------------------
+
+function paintNodeState() {
+  nodeEls.forEach((node, id) => {
+    node.classList.toggle('selected', id === questState.selectedQuestId);
+    node.classList.toggle('link-src', id === questState.linkSource);
   });
-  
-  document.getElementById('btn-del-quest').addEventListener('click', () => {
-    if(questState.selectedQuestId && confirm("Delete this quest?")) {
-      const chapter = questState.chapters[questState.activeChapter];
-      if(chapter) {
-        chapter.quests = chapter.quests.filter(q => q.id !== questState.selectedQuestId);
-        chapter.quests.forEach(q => {
-          q.dependencies = q.dependencies.filter(d => d !== questState.selectedQuestId);
-        });
-        questState.selectedQuestId = null;
-        questState.linkSource = null;
-        saveQuestState();
-        renderQuestCanvas();
-        renderQuestEditor();
-      }
-    }
-  });
-  
-  const qcContainer = document.getElementById('quest-canvas-container');
-  
-  // FIX: Reliable background click detection
-  qcContainer.addEventListener('mousedown', (e) => {
-    const isNode = e.target.closest('.quest-node');
-    const isBackgroundClick = !isNode;
-    
-    if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && isBackgroundClick)) {
-      questState.isPanning = true;
-      questState.panStart = { x: e.clientX - questState.canvasOffset.x, y: e.clientY - questState.canvasOffset.y };
-      e.preventDefault();
-      qcContainer.style.cursor = 'grabbing';
-      
-      questState.selectedQuestId = null;
-      questState.linkSource = null;
-      renderQuestCanvas();
-      renderQuestEditor();
-    }
-  });
-  
-  // Use requestAnimationFrame for smoother dragging/panning
-  let rafPending = false;
-  window.addEventListener('mousemove', (e) => {
-    if (!questState.isPanning && !questState.dragging) return;
-    
-    if (!rafPending) {
-      requestAnimationFrame(() => {
-        if (questState.isPanning && questState.panStart) {
-          questState.canvasOffset.x = e.clientX - questState.panStart.x;
-          questState.canvasOffset.y = e.clientY - questState.panStart.y;
-          
-          const inner = document.getElementById('quest-canvas-inner');
-          if (inner) inner.style.transform = `translate(${questState.canvasOffset.x}px, ${questState.canvasOffset.y}px) scale(${questState.canvasScale})`;
-        }
-        
-        if (questState.dragging) {
-          const dx = (e.clientX - questState.dragging.startX) / questState.canvasScale;
-          const dy = (e.clientY - questState.dragging.startY) / questState.canvasScale;
-          const chapter = questState.chapters[questState.activeChapter];
-          const q = chapter.quests.find(x => x.id === questState.dragging.questId);
-          
-          if(q) {
-            q.x = parseFloat((questState.dragging.origX + dx/80).toFixed(2));
-            q.y = parseFloat((questState.dragging.origY + dy/80).toFixed(2));
-            
-            const nodeEl = document.getElementById('quest-node-' + q.id);
-            if (nodeEl) {
-              nodeEl.style.left = (q.x * 80) + 'px';
-              nodeEl.style.top = (q.y * 80) + 'px';
-            }
-            renderQuestEdges();
-          }
-        }
-        rafPending = false;
-      });
-      rafPending = true;
-    }
-  });
-  
-  window.addEventListener('mouseup', () => {
-    if(questState.isPanning) qcContainer.style.cursor = 'default';
-    questState.isPanning = false;
-    questState.panStart = null;
-    
-    if(questState.dragging) {
-      saveQuestState();
-      questState.dragging = null;
-      renderQuestEditor(); 
-    }
-  });
-  
-  qcContainer.addEventListener('wheel', (e) => {
+  $('quest-canvas-container')?.classList.toggle('linking', !!questState.linkSource);
+}
+
+function selectQuest(id) {
+  if (questState.selectedQuestId === id) return;
+  questState.selectedQuestId = id;
+  paintNodeState();
+  renderQuestEdges();
+  renderQuestEditor();
+}
+
+function setLinkSource(id) {
+  questState.linkSource = id;
+  paintNodeState();
+  updateStatus();
+}
+
+/** True if `from` already depends (directly or not) on `target`, so target -> from would make a loop. */
+function dependsOn(chapter, from, target, seen = new Set()) {
+  if (from === target) return true;
+  if (seen.has(from)) return false;
+  seen.add(from);
+  const q = chapter.quests.find(x => x.id === from);
+  return !!q && q.dependencies.some(d => dependsOn(chapter, d, target, seen));
+}
+
+function completeLink(targetId) {
+  const chapter = currentChapter();
+  const target = chapter?.quests.find(q => q.id === targetId);
+  const src = questState.linkSource;
+  if (!target || !src || src === targetId) return setLinkSource(null);
+  if (target.dependencies.includes(src)) { toast('Already linked.', { type: 'info' }); return setLinkSource(null); }
+  if (dependsOn(chapter, src, targetId)) { toast('That would make a dependency loop.', { type: 'error' }); return setLinkSource(null); }
+  target.dependencies.push(src);
+  saveQuestState();
+  setLinkSource(null);
+  renderQuestEdges();
+  renderQuestEditor();
+  renderQuestCanvas();
+}
+
+// ---------------------------------------------------------------------------
+// Pointer input: one pointer pans or drags, two pointers pinch-zoom (touch, pen and mouse)
+// ---------------------------------------------------------------------------
+
+function bindCanvasInput(container) {
+  const pointers = new Map();          // pointerId -> {x, y} in client px
+  let gesture = null;                  // {kind: 'pan'|'node'|'pinch'|'ignore', ...}
+  let edgesPending = false;
+  const scheduleEdges = () => {
+    if (edgesPending) return;
+    edgesPending = true;
+    requestAnimationFrame(() => { edgesPending = false; renderQuestEdges(); });
+  };
+  const local = e => { const r = container.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const pinchMetrics = () => {
+    const [a, b] = [...pointers.values()];
+    const r = container.getBoundingClientRect();
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top };
+  };
+
+  container.addEventListener('pointerdown', e => {
+    if (e.target.closest('button, .status-chip')) return;        // map controls handle themselves
+    if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { container.setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    questState.canvasScale = Math.max(0.3, Math.min(2.5, questState.canvasScale * factor));
-    renderQuestCanvas();
-  }, { passive: false });
-  
-  document.getElementById('btn-zoom-in').addEventListener('click', () => {
-    questState.canvasScale = Math.min(2.5, questState.canvasScale * 1.2);
-    renderQuestCanvas();
-  });
-  document.getElementById('btn-zoom-out').addEventListener('click', () => {
-    questState.canvasScale = Math.max(0.3, questState.canvasScale / 1.2);
-    renderQuestCanvas();
-  });
-  document.getElementById('btn-zoom-reset').addEventListener('click', () => {
-    questState.canvasScale = 1;
-    questState.canvasOffset = { x: 60, y: 60 };
-    renderQuestCanvas();
+
+    if (pointers.size === 2) {                                   // second finger: switch to pinch
+      if (gesture?.kind === 'node' && gesture.moved) { saveQuestState(); renderQuestEditor(); }
+      const m = pinchMetrics();
+      gesture = { kind: 'pinch', dist: m.dist, x: m.x, y: m.y, scale: questState.canvasScale, off: { ...questState.canvasOffset } };
+      return;
+    }
+    if (pointers.size > 2) return;
+
+    const nodeEl = e.target.closest('.quest-node');
+    const forcePan = e.button === 1 || e.altKey;
+    if (nodeEl && !forcePan) {
+      const id = nodeEl.dataset.id;
+      if (questState.linkSource) { gesture = { kind: 'ignore' }; completeLink(id); return; }
+      const q = currentChapter()?.quests.find(x => x.id === id);
+      if (!q) return;
+      selectQuest(id);
+      gesture = { kind: 'node', id, startX: e.clientX, startY: e.clientY, origX: q.x, origY: q.y, moved: false };
+    } else {
+      gesture = { kind: 'pan', startX: e.clientX, startY: e.clientY, off: { ...questState.canvasOffset }, moved: false, forced: forcePan };
+    }
   });
 
-  document.getElementById('btn-add-chapter').addEventListener('click', () => {
-    const id = newId();
+  container.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!gesture) return;
+
+    if (gesture.kind === 'pinch' && pointers.size >= 2) {
+      const m = pinchMetrics();
+      const s = clamp(gesture.scale * m.dist / gesture.dist, MIN_SCALE, MAX_SCALE);
+      // Keep the world point that started under the fingers' midpoint under their current midpoint.
+      const wx = (gesture.x - gesture.off.x) / gesture.scale, wy = (gesture.y - gesture.off.y) / gesture.scale;
+      questState.canvasScale = s;
+      questState.canvasOffset = { x: m.x - wx * s, y: m.y - wy * s };
+      applyTransform();
+      return;
+    }
+    const dx = e.clientX - gesture.startX, dy = e.clientY - gesture.startY;
+    if (gesture.kind === 'node') {
+      if (!gesture.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      gesture.moved = true;
+      const q = currentChapter()?.quests.find(x => x.id === gesture.id);
+      if (!q) return;
+      q.x = +(gesture.origX + dx / questState.canvasScale / GRID).toFixed(2);
+      q.y = +(gesture.origY + dy / questState.canvasScale / GRID).toFixed(2);
+      const el = nodeEls.get(q.id);
+      if (el) { el.style.left = q.x * GRID + 'px'; el.style.top = q.y * GRID + 'px'; el.classList.add('dragging'); }
+      scheduleEdges();
+    } else if (gesture.kind === 'pan') {
+      if (!gesture.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      gesture.moved = true;
+      container.classList.add('panning');
+      questState.canvasOffset = { x: gesture.off.x + dx, y: gesture.off.y + dy };
+      applyTransform();
+    }
+  });
+
+  const end = e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    try { container.releasePointerCapture(e.pointerId); } catch {}
+    if (!gesture) return;
+    if (gesture.kind === 'pinch') {
+      // Leave the remaining finger idle until it lifts, so the pinch doesn't turn into a jumpy pan.
+      if (pointers.size < 2) gesture = pointers.size ? { kind: 'ignore' } : null;
+      return;
+    }
+    if (pointers.size) return;
+    if (gesture.kind === 'node') {
+      nodeEls.get(gesture.id)?.classList.remove('dragging');
+      if (gesture.moved) { saveQuestState(); renderQuestEdges(); renderQuestEditor(); }
+    } else if (gesture.kind === 'pan') {
+      container.classList.remove('panning');
+      // A tap on empty space deselects (and cancels a pending link).
+      if (!gesture.moved && !gesture.forced && e.type === 'pointerup') {
+        questState.linkSource = null;
+        questState.selectedQuestId = null;
+        paintNodeState(); updateStatus(); renderQuestEdges(); renderQuestEditor();
+      }
+    }
+    gesture = null;
+  };
+  container.addEventListener('pointerup', end);
+  container.addEventListener('pointercancel', end);
+  container.addEventListener('lostpointercapture', e => { if (pointers.has(e.pointerId)) end(e); });
+
+  container.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = local(e);
+    zoomAt(questState.canvasScale * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), p.x, p.y);
+  }, { passive: false });
+
+  container.addEventListener('contextmenu', e => e.preventDefault());   // long-press on touch shouldn't pop a menu
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+// ---------------------------------------------------------------------------
+
+function bindQuestUI() {
+  $('btn-link-dep').addEventListener('click', () => {
+    if (!questState.selectedQuestId) return toast('Select a quest first, then tap another quest to make this one its prerequisite.', { type: 'info' });
+    setLinkSource(questState.linkSource ? null : questState.selectedQuestId);
+  });
+
+  $('btn-del-quest').addEventListener('click', () => {
+    const chapter = currentChapter();
+    if (!chapter || !questState.selectedQuestId || !confirm('Delete this quest?')) return;
+    const id = questState.selectedQuestId;
+    chapter.quests = chapter.quests.filter(q => q.id !== id);
+    chapter.quests.forEach(q => { q.dependencies = q.dependencies.filter(d => d !== id); });
+    questState.selectedQuestId = null;
+    questState.linkSource = null;
+    saveQuestState();
+    renderQuestCanvas();
+    renderQuestEditor();
+  });
+
+  const container = $('quest-canvas-container');
+  bindCanvasInput(container);
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && questState.linkSource) setLinkSource(null);
+  });
+
+  $('btn-zoom-in').addEventListener('click', () => zoomCenter(1.25));
+  $('btn-zoom-out').addEventListener('click', () => zoomCenter(1 / 1.25));
+  $('btn-zoom-reset').addEventListener('click', () => { questState.canvasScale = 1; questState.canvasOffset = { x: 60, y: 60 }; applyTransform(); });
+  $('btn-zoom-fit')?.addEventListener('click', fitView);
+
+  $('btn-add-chapter').addEventListener('click', () => {
     const title = `Chapter ${questState.chapters.length + 1}`;
-    questState.chapters.push({
-      id, filename: title.toLowerCase().replace(/ /g, '_'), title, order_index: questState.chapters.length, quests: []
-    });
+    questState.chapters.push({ id: newId(), filename: title.toLowerCase().replace(/ /g, '_'), title, order_index: questState.chapters.length, quests: [] });
     questState.activeChapter = questState.chapters.length - 1;
+    questState.selectedQuestId = null;
     saveQuestState();
     triggerQuestRenders();
   });
-  
-  document.getElementById('btn-layout-quests').addEventListener('click', () => {
-    const chapter = questState.chapters[questState.activeChapter];
-    if(chapter) {
-      chapter.quests.forEach((q, i) => {
-        q.x = (i % 5) * 2.5;
-        q.y = Math.floor(i / 5) * 2.5;
-      });
-      saveQuestState();
-      renderQuestCanvas();
-    }
+
+  $('btn-layout-quests').addEventListener('click', () => {
+    const chapter = currentChapter();
+    if (!chapter) return;
+    chapter.quests.forEach((q, i) => { q.x = (i % 5) * 2.5; q.y = Math.floor(i / 5) * 2.5; });
+    saveQuestState();
+    renderQuestCanvas();
+    renderQuestEditor();
+    fitView();
   });
-  
-  document.getElementById('btn-add-quest').addEventListener('click', () => addQuest());
+
+  $('btn-add-quest').addEventListener('click', () => addQuest());
+}
+
+/** A free spot near the middle of what the user is looking at, snapped to half a grid unit. */
+function spotInView(chapter) {
+  const box = $('quest-canvas-container').getBoundingClientRect();
+  const s = questState.canvasScale;
+  const wx = (box.width / 2 - questState.canvasOffset.x) / s - NODE_W / 2;
+  const wy = (box.height / 2 - questState.canvasOffset.y) / s - NODE_H / 2;
+  let x = Math.round(wx / GRID * 2) / 2, y = Math.round(wy / GRID * 2) / 2;
+  const taken = () => chapter.quests.some(q => Math.abs(q.x - x) < 0.5 && Math.abs(q.y - y) < 0.5);
+  for (let i = 0; i < 40 && taken(); i++) { x += 0.5; if (i % 8 === 7) { x -= 4; y += 0.5; } }
+  return { x: Math.max(0, x), y: Math.max(0, y) };
 }
 
 function addQuest(title = 'New Quest', tasks = [], rewards = []) {
-  const chapter = questState.chapters[questState.activeChapter];
-  if(!chapter) return null;
+  const chapter = currentChapter();
+  if (!chapter) return null;
   const id = newId();
-  const col = chapter.quests.length % 5;
-  const row = Math.floor(chapter.quests.length / 5);
-  const quest = {
-    id, title, subtitle: '', description: [],
-    x: col * 2.5, y: row * 2.5,
-    shape: 'default', dependencies: [], tasks, rewards
-  };
+  const { x, y } = spotInView(chapter);
+  const quest = { id, title, subtitle: '', description: [], x, y, shape: 'default', dependencies: [], tasks, rewards };
   chapter.quests.push(quest);
   questState.selectedQuestId = id;
   saveQuestState();
+  renderQuestChapters();
   renderQuestCanvas();
   renderQuestEditor();
   return quest;
@@ -188,7 +337,7 @@ function addQuest(title = 'New Quest', tasks = [], rewards = []) {
  * Picking the same thing twice bumps its count instead of adding a duplicate row.
  */
 function addEntriesToQuest({ entries, as, newQuest }) {
-  const chapter = questState.chapters[questState.activeChapter];
+  const chapter = currentChapter();
   if (!chapter || entries.length === 0) return { message: 'Nothing to add.' };
 
   const tasks = [], rewards = [];
@@ -226,218 +375,175 @@ function addEntriesToQuest({ entries, as, newQuest }) {
   return { message: `Added ${what} to "${quest.title}".` };
 }
 
-export function renderQuestChapters() {
-  const container = document.getElementById('quest-chapters-list');
-  if(!container) return;
-  container.innerHTML = '';
-  
-  const fragment = document.createDocumentFragment();
-  
-  questState.chapters.forEach((ch, idx) => {
-    const btn = document.createElement('button');
-    btn.className = idx === questState.activeChapter ? 'btn-primary active' : 'btn-primary';
-    btn.style.cssText = `padding:4px 8px; font-size:11px; display:inline-flex; align-items:center; ${idx === questState.activeChapter ? 'background:var(--green); color:#000;' : ''}`;
-    
-    const safeTitle = escapeHtml(ch.title);
-    btn.innerHTML = `<span>${safeTitle} (${ch.quests.length})</span>`;
-    
-    if (questState.chapters.length > 1) {
-      const delBtn = document.createElement('span');
-      delBtn.innerHTML = '&times;';
-      delBtn.style.cssText = `margin-left:6px; font-size:14px; font-weight:bold; cursor:pointer; ${idx === questState.activeChapter ? 'color:#a00;' : 'color:#ff4466;'}`;
-      delBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if(confirm(`Delete chapter "${ch.title}"?`)) {
-          questState.chapters.splice(idx, 1);
-          questState.activeChapter = Math.max(0, idx - 1);
-          questState.selectedQuestId = null;
-          saveQuestState();
-          triggerQuestRenders();
-        }
-      });
-      btn.appendChild(delBtn);
-    }
-    
-    btn.addEventListener('click', () => {
-      questState.activeChapter = idx;
-      questState.selectedQuestId = null;
-      triggerQuestRenders();
-    });
-    
-    btn.addEventListener('dblclick', () => {
-      const newName = prompt("Rename Chapter:", ch.title);
-      if(newName) {
-        ch.title = newName;
-        ch.filename = newName.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
-        saveQuestState();
-        renderQuestChapters();
-      }
-    });
-    
-    fragment.appendChild(btn);
-  });
-  container.appendChild(fragment);
+// ---------------------------------------------------------------------------
+// Chapters
+// ---------------------------------------------------------------------------
+
+function renameChapter(ch) {
+  const newName = prompt('Rename chapter:', ch.title);
+  if (!newName || !newName.trim()) return;
+  ch.title = newName.trim();
+  ch.filename = ch.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'chapter';
+  saveQuestState();
+  renderQuestChapters();
 }
 
+export function renderQuestChapters() {
+  const container = $('quest-chapters-list');
+  if (!container) return;
+  const fragment = document.createDocumentFragment();
+
+  questState.chapters.forEach((ch, idx) => {
+    const active = idx === questState.activeChapter;
+    const btn = document.createElement('div');
+    btn.className = `qc-chapter${active ? ' active' : ''}`;
+    btn.setAttribute('role', 'button');
+    const label = document.createElement('span');
+    label.textContent = `${ch.title} (${ch.quests.length})`;
+    btn.appendChild(label);
+
+    if (active) {
+      const edit = document.createElement('span');
+      edit.className = 'qc-chapter-act'; edit.title = 'Rename chapter'; edit.textContent = '✎';
+      edit.addEventListener('click', e => { e.stopPropagation(); renameChapter(ch); });
+      btn.appendChild(edit);
+    }
+    if (questState.chapters.length > 1) {
+      const del = document.createElement('span');
+      del.className = 'qc-chapter-act danger'; del.title = 'Delete chapter'; del.textContent = '×';
+      del.addEventListener('click', e => {
+        e.stopPropagation();
+        if (!confirm(`Delete chapter "${ch.title}" and its ${ch.quests.length} quest(s)?`)) return;
+        questState.chapters.splice(idx, 1);
+        questState.activeChapter = Math.max(0, idx - 1);
+        questState.selectedQuestId = null;
+        questState.linkSource = null;
+        saveQuestState();
+        triggerQuestRenders();
+      });
+      btn.appendChild(del);
+    }
+
+    btn.addEventListener('click', () => {
+      if (questState.activeChapter === idx) return;
+      questState.activeChapter = idx;
+      questState.selectedQuestId = null;
+      questState.linkSource = null;
+      triggerQuestRenders();
+      fitView();
+    });
+    btn.addEventListener('dblclick', () => renameChapter(ch));
+    fragment.appendChild(btn);
+  });
+  container.replaceChildren(fragment);
+}
+
+// ---------------------------------------------------------------------------
+// Canvas rendering. Nodes are created once and updated in place, so selecting,
+// dragging and editing never rebuilds the map.
+// ---------------------------------------------------------------------------
+
 function renderQuestEdges() {
-  const chapter = questState.chapters[questState.activeChapter];
-  const g = document.getElementById('quest-edges-paths');
-  if(!chapter || !g) return;
+  const chapter = currentChapter();
+  const g = $('quest-edges-paths');
+  if (!chapter || !g) return;
 
   let edgesHtml = '';
+  const byId = new Map(chapter.quests.map(q => [q.id, q]));
   chapter.quests.forEach(quest => {
     quest.dependencies.forEach(depId => {
-      const dep = chapter.quests.find(q => q.id === depId);
-      if(!dep) return;
+      const dep = byId.get(depId);
+      if (!dep) return;
       const isSelected = quest.id === questState.selectedQuestId || depId === questState.selectedQuestId;
-      
-      const W = 150, H = 70;
-      const cx1 = (dep.x * 80) + 75;
-      const cy1 = (dep.y * 80) + 35;
-      const cx2 = (quest.x * 80) + 75;
-      const cy2 = (quest.y * 80) + 35;
-      
-      const dx = cx2 - cx1;
-      const dy = cy2 - cy1;
-      const distance = Math.sqrt(dx*dx + dy*dy);
-      
-      if (distance < 10) return;
-      
-      const angle = Math.atan2(dy, dx);
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      
-      const pBackTargetX = cos !== 0 ? Math.abs((W/2 + 10) / cos) : Infinity;
-      const pBackTargetY = sin !== 0 ? Math.abs((H/2 + 10) / sin) : Infinity;
-      const pullBackTarget = Math.min(pBackTargetX, pBackTargetY);
-      
-      const pBackSourceX = cos !== 0 ? Math.abs((W/2 + 2) / cos) : Infinity;
-      const pBackSourceY = sin !== 0 ? Math.abs((H/2 + 2) / sin) : Infinity;
-      const pullBackSource = Math.min(pBackSourceX, pBackSourceY);
-      
-      if (distance <= pullBackTarget + pullBackSource) return;
 
-      const startX = cx1 + cos * pullBackSource;
-      const startY = cy1 + sin * pullBackSource;
-      const targetX = cx2 - cos * pullBackTarget;
-      const targetY = cy2 - sin * pullBackTarget;
-      
-      edgesHtml += `
-        <path d="M ${startX} ${startY} L ${targetX} ${targetY}"
-              stroke="${isSelected ? '#fbbf24' : '#f59e0b'}"
-              stroke-width="${isSelected ? 2 : 1.5}"
-              fill="none"
-              stroke-dasharray="${isSelected ? '6,3' : '4,3'}"
-              marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})"
-              opacity="0.8" />
-      `;
+      const W = NODE_W, H = NODE_H;
+      const cx1 = dep.x * GRID + W / 2, cy1 = dep.y * GRID + H / 2;
+      const cx2 = quest.x * GRID + W / 2, cy2 = quest.y * GRID + H / 2;
+      const dx = cx2 - cx1, dy = cy2 - cy1;
+      const distance = Math.hypot(dx, dy);
+      if (distance < 10) return;
+
+      const cos = dx / distance, sin = dy / distance;
+      const pullBack = pad => Math.min(cos !== 0 ? Math.abs((W / 2 + pad) / cos) : Infinity, sin !== 0 ? Math.abs((H / 2 + pad) / sin) : Infinity);
+      const pullTarget = pullBack(10), pullSource = pullBack(2);
+      if (distance <= pullTarget + pullSource) return;
+
+      const sx = cx1 + cos * pullSource, sy = cy1 + sin * pullSource;
+      const tx = cx2 - cos * pullTarget, ty = cy2 - sin * pullTarget;
+      edgesHtml += `<path d="M ${sx} ${sy} L ${tx} ${ty}" stroke="${isSelected ? '#fbbf24' : '#f59e0b'}" stroke-width="${isSelected ? 2 : 1.5}" fill="none" stroke-dasharray="${isSelected ? '6,3' : '4,3'}" marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})" opacity="0.8" />`;
     });
   });
   g.innerHTML = edgesHtml;
 }
 
-export function renderQuestCanvas() {
-  const inner = document.getElementById('quest-canvas-inner');
-  if(!inner) return;
-  inner.style.transform = `translate(${questState.canvasOffset.x}px, ${questState.canvasOffset.y}px) scale(${questState.canvasScale})`;
-  
-  const chapter = questState.chapters[questState.activeChapter];
-  if(!chapter) return;
-  
-  renderQuestEdges();
-  
-  const nodesContainer = document.getElementById('quest-nodes');
-  nodesContainer.innerHTML = '';
-  
-  if (chapter.quests.length === 0) {
-    nodesContainer.innerHTML = `
-      <div style="position:absolute; top:300px; left:400px; transform:translate(-50%,-50%); text-align:center; pointer-events:none;">
-        <div style="font-size:48px; margin-bottom:8px;">📜</div>
-        <div style="color:var(--muted); font-size:14px;">No quests in this chapter.</div>
-      </div>
-    `;
-  }
-  
-  const fragment = document.createDocumentFragment();
-  
-  chapter.quests.forEach(quest => {
-    const isSelected = quest.id === questState.selectedQuestId;
-    const isLinkSrc = quest.id === questState.linkSource;
-    const px = quest.x * 80;
-    const py = quest.y * 80;
-    
-    const node = document.createElement('div');
-    node.id = 'quest-node-' + quest.id;
-    node.className = 'quest-node';
-    node.style.position = 'absolute';
-    node.style.left = px + 'px';
-    node.style.top = py + 'px';
-    node.style.width = '150px';
-    node.style.zIndex = isSelected ? '5' : '2';
-    node.style.cursor = questState.linkSource ? 'crosshair' : 'grab';
-    if(isSelected) node.style.transform = 'scale(1.04)';
-    
-    let taskHtml = '';
-    quest.tasks.slice(0,4).forEach(t => {
-      const entry = entryForTask(t);
-      const label = t.taskType === 'checkmark' ? t.item : displayName(t.taskType === 'kill' ? 'entity' : 'item', t.item);
-      const icon = (entry && t.taskType !== 'kill') ? iconHtml(entry, 14) + ' ' : (TASK_ICONS[t.sourceType || t.taskType] || '');
-      taskHtml += `<span style="font-size:9px; background:#1e293b; border-radius:3px; padding:1px 5px; color:#94a3b8; border:1px solid #37415133; margin:1px; display:inline-flex; align-items:center; gap:3px;">${icon}${escapeHtml(String(label).slice(0, 22))}</span>`;
-    });
-    if(quest.tasks.length > 4) taskHtml += `<span style="font-size:9px; color:#64748b;">+${quest.tasks.length-4}</span>`;
-    if(quest.tasks.length === 0) taskHtml += `<span style="font-size:9px; color:#374151; font-style:italic;">no tasks</span>`;
-    
-    const safeTitle = escapeHtml(quest.title || 'Untitled');
-    const safeShape = escapeHtml(quest.shape);
-    
-    node.innerHTML = `
-      <div style="background:${isSelected ? '#1a2035' : '#141414'}; border:2px solid ${isSelected ? '#f59e0b' : isLinkSrc ? '#4ade80' : '#374151'}; border-radius:6px; padding:6px 8px; box-shadow:${isSelected ? '0 0 16px #f59e0b44' : '0 2px 8px #00000088'};">
-        ${quest.shape && quest.shape !== 'default' ? `<span style="position:absolute; top:2px; right:4px; font-size:9px; color:#64748b;">${safeShape}</span>` : ''}
-        <div style="font-size:11px; font-weight:700; color:${isSelected ? '#f59e0b' : '#e2e8f0'}; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${safeTitle}</div>
-        <div style="display:flex; flex-wrap:wrap; gap:2px;">${taskHtml}</div>
-        ${quest.dependencies.length > 0 ? `<div style="margin-top:3px; font-size:9px; color:#78350f;">⬅ ${quest.dependencies.length} dep(s)</div>` : ''}
-      </div>
-      <div style="text-align:center; font-size:8px; color:#334155; margin-top:1px; letter-spacing:0.05em;">${quest.id}</div>
-    `;
-    
-    node.addEventListener('mousedown', (e) => {
-      if(e.button !== 0) return;
-      e.stopPropagation();
-      if(questState.linkSource !== null) {
-        if(questState.linkSource !== quest.id && !quest.dependencies.includes(questState.linkSource)) {
-          quest.dependencies.push(questState.linkSource);
-          saveQuestState();
-        }
-        questState.linkSource = null;
-        renderQuestCanvas();
-        renderQuestEditor();
-        return;
-      }
-      questState.selectedQuestId = quest.id;
-      questState.dragging = {
-        questId: quest.id,
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: quest.x,
-        origY: quest.y
-      };
-      renderQuestCanvas();
-      renderQuestEditor();
-    });
-    
-    fragment.appendChild(node);
+function nodeHtml(quest) {
+  let taskHtml = '';
+  quest.tasks.slice(0, 4).forEach(t => {
+    const entry = entryForTask(t);
+    const label = t.taskType === 'checkmark' ? t.item : displayName(t.taskType === 'kill' ? 'entity' : 'item', t.item);
+    const icon = (entry && t.taskType !== 'kill') ? iconHtml(entry, 14) + ' ' : (TASK_ICONS[t.sourceType || t.taskType] || '');
+    taskHtml += `<span class="qn-chip">${icon}${escapeHtml(String(label).slice(0, 22))}</span>`;
   });
-  
-  nodesContainer.appendChild(fragment);
-  
-  const statusBar = document.getElementById('quest-status-bar');
-  if(statusBar) {
-    statusBar.innerHTML = `
-      <span class="status-chip">${Math.round(questState.canvasScale * 100)}%</span>
-      <span class="status-chip">${chapter.quests.length} quests</span>
-      ${questState.linkSource ? `<span class="status-chip" style="background:#1e3a1e; color:#4ade80; border-color:#4ade80;">🔗 Click target quest to link dependency</span>` : ''}
-    `;
+  if (quest.tasks.length > 4) taskHtml += `<span class="qn-more">+${quest.tasks.length - 4}</span>`;
+  if (quest.tasks.length === 0) taskHtml += `<span class="qn-none">no tasks</span>`;
+
+  return `<div class="qn-card">
+    ${quest.shape && quest.shape !== 'default' ? `<span class="qn-shape">${escapeHtml(quest.shape)}</span>` : ''}
+    <div class="qn-title">${escapeHtml(quest.title || 'Untitled')}</div>
+    <div class="qn-tasks">${taskHtml}</div>
+    ${quest.dependencies.length > 0 ? `<div class="qn-deps">⬅ ${quest.dependencies.length} dep(s)</div>` : ''}
+  </div>`;
+}
+
+function updateStatus() {
+  const bar = $('quest-status-bar');
+  const chapter = currentChapter();
+  if (!bar) return;
+  if (!$('qs-zoom')) bar.innerHTML = '<span class="status-chip" id="qs-zoom"></span><span class="status-chip" id="qs-count"></span><span class="status-chip hidden" id="qs-link"></span>';
+  $('qs-zoom').textContent = Math.round(questState.canvasScale * 100) + '%';
+  $('qs-count').textContent = `${chapter ? chapter.quests.length : 0} quests`;
+  const link = $('qs-link');
+  link.classList.toggle('hidden', !questState.linkSource);
+  link.textContent = '🔗 Tap the quest that needs this one first';
+}
+
+export function renderQuestCanvas() {
+  const nodesContainer = $('quest-nodes');
+  if (!nodesContainer) return;
+  applyTransform();
+  const chapter = currentChapter();
+  if (!chapter) return;
+
+  if (shownChapterId !== chapter.id) {            // switched chapter: start with a clean map
+    nodesContainer.replaceChildren();
+    nodeEls.clear();
+    shownChapterId = chapter.id;
   }
+
+  const live = new Set(chapter.quests.map(q => q.id));
+  nodeEls.forEach((el, id) => { if (!live.has(id)) { el.remove(); nodeEls.delete(id); } });
+
+  for (const quest of chapter.quests) {
+    let el = nodeEls.get(quest.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'quest-node';
+      el.id = 'quest-node-' + quest.id;
+      el.dataset.id = quest.id;
+      nodeEls.set(quest.id, el);
+      nodesContainer.appendChild(el);
+    }
+    const html = nodeHtml(quest);
+    if (el._html !== html) { el.innerHTML = html; el._html = html; }
+    el.style.left = quest.x * GRID + 'px';
+    el.style.top = quest.y * GRID + 'px';
+  }
+
+  const empty = $('quest-empty');
+  if (empty) empty.classList.toggle('hidden', chapter.quests.length > 0);
+  paintNodeState();
+  renderQuestEdges();
+  updateStatus();
 }
 
 export function renderQuestEditor() {
@@ -573,21 +679,21 @@ export function renderQuestEditor() {
   });
   
   // Re-bind Editor Events
-  document.getElementById('qe-title').addEventListener('change', e => { quest.title = e.target.value; saveQuestState(); renderQuestCanvas(); });
+  document.getElementById('qe-title').addEventListener('input', e => { quest.title = e.target.value; saveSoon(); renderQuestCanvas(); });
   document.getElementById('qe-subtitle').addEventListener('change', e => { quest.subtitle = e.target.value; saveQuestState(); });
   document.getElementById('qe-shape').addEventListener('change', e => { quest.shape = e.target.value; saveQuestState(); renderQuestCanvas(); });
   document.getElementById('qe-x').addEventListener('change', e => { 
     quest.x = parseFloat(e.target.value)||0; 
     saveQuestState(); 
     const nodeEl = document.getElementById('quest-node-' + quest.id);
-    if(nodeEl) { nodeEl.style.left = (quest.x * 80) + 'px'; }
+    if(nodeEl) { nodeEl.style.left = (quest.x * GRID) + 'px'; }
     renderQuestEdges();
   });
   document.getElementById('qe-y').addEventListener('change', e => { 
     quest.y = parseFloat(e.target.value)||0; 
     saveQuestState(); 
     const nodeEl = document.getElementById('quest-node-' + quest.id);
-    if(nodeEl) { nodeEl.style.top = (quest.y * 80) + 'px'; }
+    if(nodeEl) { nodeEl.style.top = (quest.y * GRID) + 'px'; }
     renderQuestEdges();
   });
   

@@ -95,7 +95,7 @@ function itemPicker({ value, onChange, allowTag = false, placeholder = 'minecraf
     menu.replaceChildren(...hits.map(h => {
       const row = el('div', { class: 'dp-suggest-row' });
       row.innerHTML = `${iconHtml(h, 20)}<span>${escapeHtml(h.name)}</span><small>${escapeHtml(h.key)}</small>`;
-      row.addEventListener('mousedown', e => { e.preventDefault(); commit(h.key); });
+      row.addEventListener('pointerdown', e => { e.preventDefault(); commit(h.key); });
       return row;
     }));
     menu.classList.remove('hidden');
@@ -128,16 +128,29 @@ function stackPicker(target, { onChange }) {
 // Generic list + form layout
 // ---------------------------------------------------------------------------
 
-function listLayout({ key, items, label, onAdd, onRemove, renderForm, empty }) {
-  const sel = Math.min(ui.selected[key] ?? 0, items.length - 1);
-  ui.selected[key] = Math.max(0, sel);
+function listLayout({ key, items, label, onAdd, onRemove, onDuplicate, renderForm, empty, noun = 'entry' }) {
+  const add = () => { onAdd(); ui.selected[key] = items.length - 1; save(); render(); };
+  if (!items.length) return el('div', { class: 'dp-empty' }, el('p', { text: empty }), button(`+ Create ${noun}`, add));
+  const sel = Math.max(0, Math.min(ui.selected[key] ?? 0, items.length - 1));
+  ui.selected[key] = sel;
   const list = el('div', { class: 'dp-list' },
-    button('+ New', () => { onAdd(); ui.selected[key] = items.length - 1; save(); render(); }, 'w-full'),
+    button('+ New', add, 'w-full'),
     ...items.map((item, i) => el('div', { class: `dp-list-item${i === sel ? ' active' : ''}`, onclick: () => { ui.selected[key] = i; render(); } },
-      el('span', { text: label(item) || '(unnamed)' }),
+      el('span', { class: 'dp-list-name', text: label(item) || '(unnamed)' }),
+      onDuplicate ? el('button', { type: 'button', class: 'dp-ib', title: 'Duplicate', text: '⧉', onclick: e => { e.stopPropagation(); ui.selected[key] = onDuplicate(i); save(); render(); } }) : null,
       removeBtn(e => { e.stopPropagation(); if (!confirm(`Delete "${label(item) || 'this entry'}"?`)) return; onRemove(i); save(); render(); }))));
-  const form = el('div', { class: 'dp-form' }, items.length ? renderForm(items[sel], sel) : el('p', { class: 'tool-note', text: empty }));
-  return el('div', { class: 'dp-split' }, list, form);
+  return el('div', { class: 'dp-split' }, list, el('div', { class: 'dp-form' }, renderForm(items[sel], sel)));
+}
+
+function dupe(list, i, tweak) {
+  const copy = structuredClone(list[i]);
+  const taken = new Set(list.map(e => e.id));
+  let id = `${copy.id}_copy`, n = 2;
+  while (taken.has(id)) id = `${copy.id}_copy${n++}`;
+  copy.id = id;
+  tweak?.(copy);
+  list.splice(i + 1, 0, copy);
+  return i + 1;
 }
 
 const uniqueId = (existing, base) => {
@@ -157,15 +170,17 @@ function renderRecipes() {
   return listLayout({
     key: 'recipes', items: d.recipes, label: r => r.id, empty: 'No recipes yet. Add one to craft, smelt or cut items.',
     onAdd: () => d.recipes.push({ id: uniqueId(d.recipes, 'new_recipe'), type: 'shaped', grid: Array(9).fill(''), ingredients: [''], ingredient: '', result: { id: '', custom: '', count: 1 }, experience: 0.1, cookingtime: 200 }),
-    onRemove: i => d.recipes.splice(i, 1),
+    onRemove: i => d.recipes.splice(i, 1), onDuplicate: i => dupe(d.recipes, i), noun: 'recipe',
     renderForm: r => {
       const meta = RECIPE_TYPES[r.type];
       const body = el('div', { class: 'dp-body' });
       const paint = () => {
         const m = RECIPE_TYPES[r.type];
         body.replaceChildren();
+        let craftGrid = null;
         if (r.type === 'shaped') {
-          body.append(el('span', { class: 'dp-label', text: 'Crafting grid (type #minecraft:planks for a tag)' }),
+          body.append(el('span', { class: 'dp-label', text: 'Crafting grid (type #minecraft:planks for a tag)' }));
+          craftGrid = (
             el('div', { class: 'dp-grid' }, r.grid.map((cell, i) => itemPicker({ value: cell, allowTag: true, compact: true, placeholder: '—', onChange: v => { r.grid[i] = v; save(); } }))));
         } else if (r.type === 'shapeless') {
           body.append(el('span', { class: 'dp-label', text: 'Ingredients (up to 9)' }),
@@ -186,7 +201,8 @@ function renderRecipes() {
           field('Result', stackPicker(r.result, { onChange: redraw => { save(); if (redraw) paintResult(); } })),
           field('Count', numberInput(r.result.count, v => { r.result.count = v; save(); }, { min: '1', max: '64' })));
         paintResult();
-        body.append(resultBox);
+        if (craftGrid) body.append(el('div', { class: 'dp-craft' }, craftGrid, el('span', { class: 'dp-arrow', text: '→' }), resultBox));
+        else body.append(resultBox);
       };
       paint();
       return el('div', {},
@@ -206,6 +222,7 @@ function renderItems() {
     key: 'items', items: d.items, label: i => i.name || i.id, empty: 'Custom items re-skin a vanilla item with a name, texture and custom model data.',
     onAdd: () => d.items.push({ id: uniqueId(d.items, 'custom_item'), base: 'minecraft:paper', name: '', customModelData: Math.max(0, ...d.items.map(i => i.customModelData)) + 1, extra: '', hasTexture: false }),
     onRemove: i => { removeTexture(d.items[i].id); d.items.splice(i, 1); },
+    onDuplicate: i => dupe(d.items, i, c => { c.hasTexture = false; c.name = c.name ? c.name + ' copy' : ''; c.customModelData = Math.max(0, ...d.items.map(x => x.customModelData)) + 1; }), noun: 'custom item',
     renderForm: item => {
       const rules = mcRules(state.mcVersion);
       const preview = el('div', { class: 'dp-texture' });
@@ -264,7 +281,7 @@ function renderTags() {
   return listLayout({
     key: 'tags', items: d.tags, label: t => t.id, empty: 'Tags group items, blocks or entities so recipes and other mods can refer to them together.',
     onAdd: () => d.tags.push({ id: uniqueId(d.tags, 'new_tag'), kind: 'item', replace: false, values: [''] }),
-    onRemove: i => d.tags.splice(i, 1),
+    onRemove: i => d.tags.splice(i, 1), onDuplicate: i => dupe(d.tags, i), noun: 'tag',
     renderForm: t => el('div', {},
       field('Tag id', textInput(t.id, v => { t.id = v.trim(); save(); }), 'Use an existing id like minecraft:planks to extend it, or c:ingots/ruby for a new shared tag.'),
       field('Kind', select(Object.entries(TAG_KINDS).map(([k, v]) => [k, v.label]), t.kind, v => { t.kind = v; save(); render(); })),
@@ -279,7 +296,7 @@ function renderLoot() {
   return listLayout({
     key: 'loot', items: d.lootTables, label: t => t.id, empty: 'Loot tables control drops. Use an existing id like minecraft:blocks/stone to override vanilla.',
     onAdd: () => d.lootTables.push({ id: uniqueId(d.lootTables, 'new_loot'), type: 'generic', pools: [{ rollsMin: 1, rollsMax: 1, entries: [{ item: '', custom: '', weight: 1, min: 1, max: 1 }] }] }),
-    onRemove: i => d.lootTables.splice(i, 1),
+    onRemove: i => d.lootTables.splice(i, 1), onDuplicate: i => dupe(d.lootTables, i), noun: 'loot table',
     renderForm: t => {
       const pools = el('div', { class: 'dp-stack-col' });
       const paint = () => pools.replaceChildren(...t.pools.map((p, pi) => el('div', { class: 'dp-card' },
@@ -315,7 +332,7 @@ function renderAdvancements() {
   return listLayout({
     key: 'advancements', items: d.advancements, label: a => a.title || a.id, empty: 'Advancements can give players recipes, loot or XP.',
     onAdd: () => d.advancements.push({ id: uniqueId(d.advancements, 'new_advancement'), parent: '', title: '', description: '', icon: 'minecraft:stone', frame: 'task', trigger: 'inventory_changed', item: '', toast: true, announce: true, rewardXp: 0, rewardRecipes: [], rewardLoot: [] }),
-    onRemove: i => d.advancements.splice(i, 1),
+    onRemove: i => d.advancements.splice(i, 1), onDuplicate: i => dupe(d.advancements, i), noun: 'advancement',
     renderForm: a => {
       const trig = el('div', {});
       const paintTrig = () => trig.replaceChildren(a.trigger === 'inventory_changed' ? field('Triggers when the player gets', itemPicker({ value: a.item, onChange: v => { a.item = v; save(); } })) : null);
@@ -353,11 +370,18 @@ async function addMod(slug, button_) {
   render();
 }
 
-function modRow(name, slug) {
+function modChip(name, slug) {
   const present = state.mods.some(m => m.slug === slug);
-  return el('div', { class: 'dp-row' }, el('span', { text: `${present ? '✓' : '✗'} ${name}` }),
-    present ? null : el('button', { type: 'button', class: 'btn-primary', text: `Add ${name}`, onclick: e => addMod(slug, e.target) }));
+  return el('span', { class: `dp-chip ${present ? 'ok' : 'missing'}` }, el('span', { text: `${present ? '✓' : '✗'} ${name}` }),
+    present ? null : el('button', { type: 'button', class: 'btn-primary', text: 'Add', onclick: e => addMod(slug, e.target) }));
 }
+
+const WG_GROUPS = {
+  general: 'General', global_terrain: 'Terrain shape', continents: 'Continents & rivers',
+  islands: 'Islands', oceans: 'Oceans', caves: 'Caves'
+};
+const wgClosed = new Set();
+let wgFilter = '';
 
 function renderWorldgen() {
   const d = dp();
@@ -367,35 +391,104 @@ function renderWorldgen() {
       el('p', { class: 'tool-note', text: `Worldgen tools target ${Object.entries(WORLDGEN_PROFILES).map(([v, p]) => `${v} (${p.label})`).join(' and ')}. Set the Minecraft version to one of those to use them.` }),
       renderRaw());
   }
-  const rows = tectonicOptionsFor(profile).map(opt => {
+
+  const total = el('strong');
+  const groups = new Map();                       // section -> {details, badge, rows: [{row, opt}]}
+  const fmt = v => typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v);
+
+  const refresh = () => {
+    let changed = 0;
+    groups.forEach(g => {
+      const n = g.rows.filter(r => r.opt.path in d.tectonic).length;
+      changed += n;
+      g.badge.textContent = n ? `${n} changed` : '';
+    });
+    total.textContent = changed ? `${changed} option${changed === 1 ? '' : 's'} changed` : 'All defaults';
+  };
+
+  for (const opt of tectonicOptionsFor(profile)) {
+    const section = opt.path.split('.')[0];
+    if (!groups.has(section)) {
+      const badge = el('span', { class: 'dp-wg-badge' });
+      const details = el('details', { class: 'dp-wg-group', open: !wgClosed.has(section), ontoggle: e => { e.target.open ? wgClosed.delete(section) : wgClosed.add(section); } },
+        el('summary', {}, el('span', { text: WG_GROUPS[section] || section }), badge));
+      const rowsBox = el('div', { class: 'dp-wg-rows' });
+      details.append(rowsBox);
+      groups.set(section, { details, badge, rowsBox, rows: [] });
+    }
+    const g = groups.get(section);
+
     const current = opt.path in d.tectonic ? d.tectonic[opt.path] : opt.def;
-    const set = v => { if (v === opt.def || (typeof v === 'number' && !Number.isFinite(v))) delete d.tectonic[opt.path]; else d.tectonic[opt.path] = v; save(); paintReset(); };
-    const input = opt.type === 'bool'
-      ? el('input', { type: 'checkbox', checked: current, onchange: e => set(e.target.checked) })
-      : numberInput(current, set, { step: opt.type === 'int' ? '1' : String(opt.step ?? 0.01) });
-    const marker = el('span', { class: 'dp-changed', text: '●', title: 'Changed from default' });
-    const paintReset = () => marker.classList.toggle('hidden', !(opt.path in d.tectonic));
-    paintReset();
-    return el('label', { class: 'dp-opt' }, el('span', { text: opt.label }), marker, input);
-  });
-  return el('div', { class: 'dp-form dp-wide' },
-    el('p', {}, el('strong', { text: 'Target: ' }), el('span', { text: `Minecraft ${state.mcVersion} · ${profile.label}` })),
-    ...profile.mods.map(m => modRow(m.name, m.slug)),
-    el('p', { class: 'tool-note', text: 'Settings below are written to config/tectonic.json. Only options you change are written. Tectonic creates the full file the first time it loads. Edits to the terrain functions themselves go in Raw files.' }),
-    el('div', { class: 'dp-opts' }, rows),
-    button('Reset all to defaults', () => { d.tectonic = {}; save(); render(); }),
+    const row = el('div', { class: 'dp-wg-row' });
+    let input;
+    const mark = () => { row.classList.toggle('changed', opt.path in d.tectonic); refresh(); };
+    const set = v => {
+      if (v === opt.def || (typeof v === 'number' && !Number.isFinite(v))) delete d.tectonic[opt.path]; else d.tectonic[opt.path] = v;
+      save(); mark();
+    };
+    if (opt.type === 'bool') input = el('input', { type: 'checkbox', class: 'dp-switch', checked: current, onchange: e => set(e.target.checked) });
+    else input = numberInput(current, set, { step: opt.type === 'int' ? '1' : String(opt.step ?? 0.01), inputmode: 'decimal' });
+    const reset = el('button', { type: 'button', class: 'dp-ib dp-wg-reset', title: 'Reset to default', text: '↺', onclick: () => {
+      delete d.tectonic[opt.path];
+      if (opt.type === 'bool') input.checked = opt.def; else input.value = opt.def;
+      save(); mark();
+    } });
+    row.append(el('div', { class: 'dp-wg-name' }, el('span', { text: opt.label }), el('small', { text: `default ${fmt(opt.def)}` })), input, reset);
+    row.classList.toggle('changed', opt.path in d.tectonic);
+    row.dataset.text = `${opt.label} ${opt.path}`.toLowerCase();
+    g.rowsBox.append(row);
+    g.rows.push({ row, opt });
+  }
+
+  const applyFilter = () => {
+    const q = wgFilter.trim().toLowerCase();
+    groups.forEach(g => {
+      let visible = 0;
+      g.rows.forEach(r => { const show = !q || r.row.dataset.text.includes(q); r.row.classList.toggle('hidden', !show); if (show) visible++; });
+      g.details.classList.toggle('hidden', visible === 0);
+      if (q) g.details.open = true;
+    });
+  };
+
+  const bar = el('div', { class: 'dp-wg-bar' },
+    el('input', { type: 'search', placeholder: 'Find an option…', value: wgFilter, oninput: e => { wgFilter = e.target.value; applyFilter(); } }),
+    total,
+    button('Reset all', () => { if (!Object.keys(d.tectonic).length || !confirm('Reset every Tectonic option to its default?')) return; d.tectonic = {}; save(); render(); }));
+
+  const out = el('div', { class: 'dp-form dp-wide' },
+    el('div', { class: 'dp-chips' }, el('span', { class: 'tool-note', text: `Minecraft ${state.mcVersion} · ${profile.label}` }), ...profile.mods.map(m => modChip(m.name, m.slug))),
+    el('p', { class: 'tool-note', text: 'Only options you change are written, to config/tectonic.json. Tectonic fills in the rest the first time it loads. For changes to the terrain itself, use a raw file below.' }),
+    bar, ...[...groups.values()].map(g => g.details),
     renderRaw());
+  refresh(); applyFilter();
+  return out;
+}
+
+const rawOpen = new WeakSet();
+
+function jsonCheck(path, content) {
+  if (!/\.json$/i.test(path)) return null;
+  try { JSON.parse(content); return { ok: true, text: '✓ valid JSON' }; }
+  catch (e) { return { ok: false, text: `✕ ${String(e.message).replace(/^JSON\.parse: /, '').slice(0, 70)}` }; }
 }
 
 function renderRaw() {
   const d = dp();
-  const sel = Math.min(ui.selected.raw ?? 0, d.rawFiles.length - 1);
   const box = el('div', { class: 'dp-card' }, el('strong', { text: 'Raw files' }),
-    el('p', { class: 'tool-note', text: 'Add any JSON file to the datapack (data/...) or resource pack (assets/...), e.g. data/minecraft/worldgen/noise_settings/overworld.json or a single Terralith biome override.' }));
-  d.rawFiles.forEach((f, i) => box.append(el('div', { class: 'dp-card' },
-    el('div', { class: 'dp-row' }, textInput(f.path, v => { f.path = v.trim(); save(); }, { placeholder: 'data/minecraft/worldgen/biome/plains.json' }), removeBtn(() => { d.rawFiles.splice(i, 1); save(); render(); })),
-    el('textarea', { rows: 8, spellcheck: 'false', oninput: e => { f.content = e.target.value; save(); } }, f.content))));
-  box.append(button('+ Raw file', () => { d.rawFiles.push({ path: 'data/minecraft/', content: '{\n}\n' }); save(); render(); }));
+    el('p', { class: 'tool-note', text: 'Add any JSON file to the datapack (data/…) or resource pack (assets/…), for example data/minecraft/worldgen/noise_settings/overworld.json or a single Terralith biome override.' }));
+  d.rawFiles.forEach(f => {
+    const badge = el('span', { class: 'dp-valid' });
+    const nameEl = el('span', { class: 'dp-raw-path', text: f.path || '(no path)' });
+    const paintBadge = () => { const r = jsonCheck(f.path, f.content); badge.className = r ? (r.ok ? 'dp-valid' : 'dp-invalid') : ''; badge.textContent = r ? r.text : ''; nameEl.textContent = f.path || '(no path)'; };
+    paintBadge();
+    const details = el('details', { class: 'dp-card dp-raw', open: rawOpen.has(f), ontoggle: e => { e.target.open ? rawOpen.add(f) : rawOpen.delete(f); } },
+      el('summary', {}, nameEl, badge, removeBtn(e => { e.preventDefault(); if (!confirm(`Delete ${f.path || 'this file'}?`)) return; d.rawFiles.splice(d.rawFiles.indexOf(f), 1); save(); render(); })),
+      el('div', { class: 'dp-stack-col' },
+        textInput(f.path, v => { f.path = v.trim(); save(); paintBadge(); }, { placeholder: 'data/minecraft/worldgen/biome/plains.json' }),
+        el('textarea', { rows: 10, spellcheck: 'false', oninput: e => { f.content = e.target.value; save(); paintBadge(); } }, f.content)));
+    box.append(details);
+  });
+  box.append(button('+ Raw file', () => { const f = { path: 'data/minecraft/', content: '{\n}\n' }; d.rawFiles.push(f); rawOpen.add(f); save(); render(); }));
   return box;
 }
 
@@ -482,8 +575,11 @@ export function render() {
   const root = document.getElementById('datapack-root');
   if (!root) return;
   const scroll = root.querySelector('.dp-content')?.scrollTop ?? 0;
+  const d = dp();
+  const counts = { recipes: d.recipes.length, items: d.items.length, tags: d.tags.length, loot: d.lootTables.length, advancements: d.advancements.length, worldgen: Object.keys(d.tectonic).length + d.rawFiles.length };
   const nav = el('div', { class: 'dp-nav' }, SECTIONS.map(([id, label]) =>
-    el('button', { type: 'button', class: `dp-nav-btn${ui.section === id ? ' active' : ''}`, text: label, onclick: () => { ui.section = id; render(); } })));
+    el('button', { type: 'button', class: `dp-nav-btn${ui.section === id ? ' active' : ''}`, onclick: () => { ui.section = id; render(); } },
+      label, counts[id] ? el('span', { class: 'dp-count', text: String(counts[id]) }) : null)));
   const content = el('div', { class: 'dp-content' }, RENDERERS[ui.section]());
   root.replaceChildren(
     el('div', { class: 'dp-head' }, nav,
