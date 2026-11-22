@@ -5,13 +5,55 @@ import { getEntry, displayName, iconHtml, onRegistryChange } from './itemdb.js';
 import { toast } from './ui.js';
 
 const GRID = 80;                       // px per quest-map unit
-const NODE_W = 150, NODE_H = 70;       // node box used for edge geometry
+const NODE_W = 150, NODE_H = 70;       // default rectangular node size
+const SHAPE_SIZE = 124;                // 1:1 size for shaped nodes
 const MIN_SCALE = 0.25, MAX_SCALE = 2.5;
 const DRAG_THRESHOLD = 6;              // px of movement before a tap becomes a drag/pan
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const currentChapter = () => questState.chapters[questState.activeChapter];
 const saveSoon = debounce(saveQuestState, 300);
+
+const isShaped = q => !!(q?.shape && q.shape !== 'default');
+const nodeSize = q => isShaped(q) ? { w: SHAPE_SIZE, h: SHAPE_SIZE } : { w: NODE_W, h: NODE_H };
+
+function gearPoints(teeth = 8, rOut = 47, rIn = 38) {
+  const pts = [];
+  for (let i = 0; i < teeth; i++) {
+    const a = (i * 2 * Math.PI) / teeth;
+    for (const [da, r] of [[-0.25, rIn], [-0.14, rOut], [0.14, rOut], [0.25, rIn]]) {
+      pts.push(`${(50 + r * Math.cos(a + da)).toFixed(1)},${(50 + r * Math.sin(a + da)).toFixed(1)}`);
+    }
+  }
+  return pts.join(' ');
+}
+
+function sunPoints(rays = 12, rOut = 48, rIn = 37) {
+  const pts = [];
+  for (let i = 0; i < rays * 2; i++) {
+    const a = (i * Math.PI) / rays - Math.PI / 2;
+    const r = i % 2 === 0 ? rOut : rIn;
+    pts.push(`${(50 + r * Math.cos(a)).toFixed(1)},${(50 + r * Math.sin(a)).toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
+
+const SHAPE_GEOMETRY = {
+  square:   '<rect class="qn-shape-path" x="4" y="4" width="92" height="92" rx="2" />',
+  rsquare:  '<rect class="qn-shape-path" x="4" y="4" width="92" height="92" rx="18" />',
+  circle:   '<circle class="qn-shape-path" cx="50" cy="50" r="46" />',
+  diamond:  '<polygon class="qn-shape-path" points="50,3 97,50 50,97 3,50" />',
+  pentagon: '<polygon class="qn-shape-path" points="50,6 93.7,37.8 77,89.2 23,89.2 6.3,37.8" />',
+  hexagon:  '<polygon class="qn-shape-path" points="50,4 89.8,27 89.8,73 50,96 10.2,73 10.2,27" />',
+  octagon:  '<polygon class="qn-shape-path" points="32.4,7.5 67.6,7.5 92.5,32.4 92.5,67.6 67.6,92.5 32.4,92.5 7.5,67.6 7.5,32.4" />',
+  gear:     `<polygon class="qn-shape-path" points="${gearPoints()}" />`,
+  sun:      `<polygon class="qn-shape-path" points="${sunPoints()}" />`
+};
+
+function shapeSvg(shape) {
+  const body = SHAPE_GEOMETRY[shape] || SHAPE_GEOMETRY.square;
+  return `<svg class="qn-shape-svg" viewBox="0 0 100 100" aria-hidden="true">${body}</svg>`;
+}
 
 const nodeEls = new Map();             // quest id -> its DOM node (kept between renders)
 let shownChapterId = null;
@@ -67,9 +109,9 @@ function fitView() {
   const chapter = currentChapter();
   const box = $('quest-canvas-container').getBoundingClientRect();
   if (!chapter || !chapter.quests.length) { questState.canvasScale = 1; questState.canvasOffset = { x: 60, y: 60 }; return applyTransform(); }
-  const xs = chapter.quests.map(q => q.x * GRID), ys = chapter.quests.map(q => q.y * GRID);
-  const minX = Math.min(...xs), minY = Math.min(...ys);
-  const w = Math.max(...xs) + NODE_W - minX, h = Math.max(...ys) + NODE_H - minY;
+  const boxes = chapter.quests.map(q => { const s = nodeSize(q); return { x: q.x * GRID, y: q.y * GRID, w: s.w, h: s.h }; });
+  const minX = Math.min(...boxes.map(b => b.x)), minY = Math.min(...boxes.map(b => b.y));
+  const w = Math.max(...boxes.map(b => b.x + b.w)) - minX, h = Math.max(...boxes.map(b => b.y + b.h)) - minY;
   const pad = 48;
   const s = clamp(Math.min((box.width - pad * 2) / w, (box.height - pad * 2) / h), MIN_SCALE, 1.5);
   questState.canvasScale = s;
@@ -456,21 +498,25 @@ function renderQuestEdges() {
       if (!dep) return;
       const isSelected = quest.id === questState.selectedQuestId || depId === questState.selectedQuestId;
 
-      const W = NODE_W, H = NODE_H;
-      const cx1 = dep.x * GRID + W / 2, cy1 = dep.y * GRID + H / 2;
-      const cx2 = quest.x * GRID + W / 2, cy2 = quest.y * GRID + H / 2;
+      const s1 = nodeSize(dep), s2 = nodeSize(quest);
+      const cx1 = dep.x * GRID + s1.w / 2, cy1 = dep.y * GRID + s1.h / 2;
+      const cx2 = quest.x * GRID + s2.w / 2, cy2 = quest.y * GRID + s2.h / 2;
       const dx = cx2 - cx1, dy = cy2 - cy1;
       const distance = Math.hypot(dx, dy);
       if (distance < 10) return;
 
       const cos = dx / distance, sin = dy / distance;
-      const pullBack = pad => Math.min(cos !== 0 ? Math.abs((W / 2 + pad) / cos) : Infinity, sin !== 0 ? Math.abs((H / 2 + pad) / sin) : Infinity);
-      const pullTarget = pullBack(10), pullSource = pullBack(2);
+      const pullBack = (q, { w, h }, pad) => {
+        if (q.shape === 'circle') return w * 0.46 + pad;
+        if (q.shape === 'diamond') return 1 / (Math.abs(cos) / (w * 0.47) + Math.abs(sin) / (h * 0.47)) + pad;
+        return Math.min(cos !== 0 ? Math.abs((w / 2 + pad) / cos) : Infinity, sin !== 0 ? Math.abs((h / 2 + pad) / sin) : Infinity);
+      };
+      const pullTarget = pullBack(quest, s2, 10), pullSource = pullBack(dep, s1, 2);
       if (distance <= pullTarget + pullSource) return;
 
       const sx = cx1 + cos * pullSource, sy = cy1 + sin * pullSource;
       const tx = cx2 - cos * pullTarget, ty = cy2 - sin * pullTarget;
-      edgesHtml += `<path d="M ${sx} ${sy} L ${tx} ${ty}" stroke="${isSelected ? '#fbbf24' : '#f59e0b'}" stroke-width="${isSelected ? 2 : 1.5}" fill="none" stroke-dasharray="${isSelected ? '6,3' : '4,3'}" marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})" opacity="0.8" />`;
+      edgesHtml += `<path d="M ${sx} ${sy} L ${tx} ${ty}" stroke="${isSelected ? '#6EE75A' : '#4db842'}" stroke-width="${isSelected ? 2 : 1.5}" fill="none" stroke-dasharray="${isSelected ? '6,3' : '4,3'}" marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})" opacity="0.8" />`;
     });
   });
   g.innerHTML = edgesHtml;
@@ -487,12 +533,18 @@ function nodeHtml(quest) {
   if (quest.tasks.length > 4) taskHtml += `<span class="qn-more">+${quest.tasks.length - 4}</span>`;
   if (quest.tasks.length === 0) taskHtml += `<span class="qn-none">no tasks</span>`;
 
-  return `<div class="qn-card">
-    ${quest.shape && quest.shape !== 'default' ? `<span class="qn-shape">${escapeHtml(quest.shape)}</span>` : ''}
-    <div class="qn-title">${escapeHtml(quest.title || 'Untitled')}</div>
+  const shaped = isShaped(quest);
+  const depsText = shaped ? `⬅ ${quest.dependencies.length}` : `⬅ ${quest.dependencies.length} dep(s)`;
+  const inner = `
+    <div class="qn-title" title="${escapeHtml(quest.title || 'Untitled')}">${escapeHtml(quest.title || 'Untitled')}</div>
     <div class="qn-tasks">${taskHtml}</div>
-    ${quest.dependencies.length > 0 ? `<div class="qn-deps">⬅ ${quest.dependencies.length} dep(s)</div>` : ''}
-  </div>`;
+    ${quest.dependencies.length > 0 ? `<div class="qn-deps">${depsText}</div>` : ''}
+  `;
+
+  if (shaped) {
+    return `<div class="qn-card">${shapeSvg(quest.shape)}<div class="qn-content">${inner}</div></div>`;
+  }
+  return `<div class="qn-card">${inner}</div>`;
 }
 
 function updateStatus() {
@@ -533,6 +585,8 @@ export function renderQuestCanvas() {
       nodeEls.set(quest.id, el);
       nodesContainer.appendChild(el);
     }
+    el.classList.toggle('shaped', isShaped(quest));
+    el.dataset.shape = quest.shape || 'default';
     const html = nodeHtml(quest);
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
     el.style.left = quest.x * GRID + 'px';
