@@ -102,8 +102,27 @@ export async function exportMrPack() {
     for (const [path, data] of datapack.overrides) zip.file(path, data, { binary: typeof data !== 'string' });
     Object.entries(buildPackToolFiles()).forEach(([path, text]) => zip.file(path, text));
 
-    // Bundle quests into the pack's overrides
+    // Bundle FTB Quests and its mod jar when the pack contains quests.
     if (questState.chapters.some(c => c.quests.length > 0)) {
+      const ftbQuestsDownloads = {
+        '1.21.1:fabric': 'https://www.curseforge.com/api/v1/mods/438496/files/9650793/download',
+        '1.20.1:fabric': 'https://www.curseforge.com/api/v1/mods/438496/files/8078537/download',
+        '1.21.1:neoforge': 'https://www.curseforge.com/api/v1/mods/289412/files/9650792/download',
+        '1.20.1:forge': 'https://www.curseforge.com/api/v1/mods/289412/files/8078538/download'
+      };
+      const ftbQuestsUrl = ftbQuestsDownloads[`${state.mcVersion}:${state.loader}`];
+      if (!ftbQuestsUrl) {
+        alert(`FTB Quests is not configured for Minecraft ${state.mcVersion} on ${state.loader}.`);
+        resetButtons();
+        return;
+      }
+
+      const ftbQuestsResponse = await fetch(ftbQuestsUrl);
+      if (!ftbQuestsResponse.ok) {
+        throw new Error(`Could not download FTB Quests (${ftbQuestsResponse.status}).`);
+      }
+      zip.file("overrides/mods/ftb-quests.jar", await ftbQuestsResponse.blob());
+
       Object.entries(buildQuestFiles()).forEach(([path, text]) => {
         zip.file("overrides/config/ftbquests/quests/" + path, text);
       });
