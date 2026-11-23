@@ -39,6 +39,7 @@ export async function exportMrPack() {
 
   try {
     const zip = new JSZip();
+    const warnings = [];
 
     let loaderVersion;
     if (state.loaderVersion.trim() !== "") {
@@ -117,11 +118,16 @@ export async function exportMrPack() {
         return;
       }
 
-      const ftbQuestsResponse = await fetch(ftbQuestsUrl);
-      if (!ftbQuestsResponse.ok) {
-        throw new Error(`Could not download FTB Quests (${ftbQuestsResponse.status}).`);
+      // CurseForge doesn't allow browser downloads (CORS), so this can fail. That must not block the
+      // export: carry on without the jar and tell the user to add FTB Quests as a normal mod.
+      try {
+        const ftbQuestsResponse = await fetch(ftbQuestsUrl);
+        if (!ftbQuestsResponse.ok) throw new Error(`HTTP ${ftbQuestsResponse.status}`);
+        zip.file("overrides/mods/ftb-quests.jar", await ftbQuestsResponse.blob());
+      } catch (e) {
+        console.warn("Could not bundle FTB Quests jar:", e);
+        warnings.push("FTB Quests could not be downloaded, so it is NOT inside the pack. Add FTB Quests to your mod list or install it manually.");
       }
-      zip.file("overrides/mods/ftb-quests.jar", await ftbQuestsResponse.blob());
 
       Object.entries(buildQuestFiles()).forEach(([path, text]) => {
         zip.file("overrides/config/ftbquests/quests/" + path, text);
@@ -130,9 +136,10 @@ export async function exportMrPack() {
 
     const content = await zip.generateAsync({ type: "blob" });
     saveAs(content, (state.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || "modpack") + ".mrpack");
+    if (warnings.length) alert("Exported, but:\n\n" + warnings.join("\n\n"));
   } catch (err) {
     console.error(err);
-    alert("An unexpected error occurred during export.");
+    alert("An unexpected error occurred during export:\n\n" + (err && err.message ? err.message : err) + (err && err.stack ? "\n\n" + String(err.stack).split("\n").slice(0, 3).join("\n") : ""));
   } finally {
     resetButtons();
   }
