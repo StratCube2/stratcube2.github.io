@@ -1,9 +1,9 @@
 // Secure, collision-resistant ID generation
 export function newId() {
   if (window.crypto && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, '').toUpperCase();
+    return crypto.randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase();
   }
-  const a = new Uint8Array(16);
+  const a = new Uint8Array(8);
   crypto.getRandomValues(a);
   return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }

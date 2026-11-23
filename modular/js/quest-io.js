@@ -1,11 +1,21 @@
 // Conversion between the editor's quest model and FTB Quests .snbt files.
-import { questState } from './state.js';
+import { state, questState } from './state.js';
 import { newId, toSNBT, shortName } from './utils.js';
 import { parseSNBT } from './snbt.js';
 
 // ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
+
+// FTB Quests IDs are 64-bit values written as up to 16 hex digits. The editor used to make
+// 32-digit IDs, which the game can't read (so dependencies silently break). Shorten any
+// such ID on export, the same way everywhere so dependency references still match.
+const validQuestId = id => /^[0-9A-F]{1,16}$/i.test(id);
+const exportId = id => (typeof id !== 'string' || validQuestId(id)) ? id : id.replace(/[^0-9A-F]/gi, '').toUpperCase().padEnd(16, '0').slice(0, 16);
+
+// 1.20.x stores items as { id, Count: 1b }; 1.21+ uses { id, count: 1 }.
+const legacyItems = () => /^1\.20(\.|$)|^1\.1\d(\.|$)/.test(String(state.mcVersion || ''));
+const itemStack = (id, n) => legacyItems() ? { id, Count: `__RAW__${n}b` } : { count: `__RAW__${n}`, id };
 
 function questToSNBTObject(q) {
   return {
@@ -15,20 +25,20 @@ function questToSNBTObject(q) {
     x: `__RAW__${q.x}d`,
     y: `__RAW__${q.y}d`,
     shape: q.shape && q.shape !== 'default' ? q.shape : undefined,
-    dependencies: q.dependencies?.length ? q.dependencies : undefined,
+    dependencies: q.dependencies?.length ? q.dependencies.map(exportId) : undefined,
     // Root quests need always_invisible: false so dependency chains load correctly.
     always_invisible: q.dependencies?.length ? undefined : false,
     tasks: q.tasks.map(t => {
-      if (t.taskType === 'kill') return { id: t.id, type: 'kill', entity: t.item, value: `__RAW__${t.count || 1}L` };
-      if (t.taskType === 'checkmark') return { id: t.id, type: 'checkmark', title: t.item };
-      return { id: t.id, type: 'item', item: { id: t.item, Count: '__RAW__1b' }, count: t.count > 1 ? `__RAW__${t.count}L` : undefined };
+      if (t.taskType === 'kill') return { id: exportId(t.id), type: 'kill', entity: t.item, value: `__RAW__${t.count || 1}L` };
+      if (t.taskType === 'checkmark') return { id: exportId(t.id), type: 'checkmark', title: t.item };
+      return { id: exportId(t.id), type: 'item', item: itemStack(t.item, 1), count: t.count > 1 ? `__RAW__${t.count}L` : undefined };
     }),
     rewards: q.rewards.map(r => {
-      if (r.rewardType === 'xp') return { id: r.id, type: 'xp', xp: r.count || 100 };
-      if (r.rewardType === 'command') return { id: r.id, type: 'command', command: r.item, player_command: false };
-      return { id: r.id, type: 'item', item: { id: r.item, Count: `__RAW__${r.count || 1}b` } };
+      if (r.rewardType === 'xp') return { id: exportId(r.id), type: 'xp', xp: r.count || 100 };
+      if (r.rewardType === 'command') return { id: exportId(r.id), type: 'command', command: r.item, player_command: false };
+      return { id: exportId(r.id), type: 'item', item: itemStack(r.item, r.count || 1) };
     }),
-    id: q.id
+    id: exportId(q.id)
   };
 }
 
@@ -40,7 +50,7 @@ export function buildQuestFiles() {
   };
   questState.chapters.forEach(ch => {
     files[`chapters/${ch.filename}.snbt`] = toSNBT({
-      id: ch.id,
+      id: exportId(ch.id),
       group: '',
       order_index: ch.order_index,
       filename: ch.filename,
