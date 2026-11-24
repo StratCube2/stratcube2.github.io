@@ -13,6 +13,9 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const currentChapter = () => questState.chapters[questState.activeChapter];
 const saveSoon = debounce(saveQuestState, 300);
+// Don't lose a pending edit if the tab is closed or backgrounded (common on tablets).
+window.addEventListener('pagehide', saveQuestState);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveQuestState(); });
 
 const isShaped = q => !!(q?.shape && q.shape !== 'default');
 const nodeSize = q => isShaped(q) ? { w: SHAPE_SIZE, h: SHAPE_SIZE } : { w: NODE_W, h: NODE_H };
@@ -734,18 +737,22 @@ export function renderQuestEditor() {
   
   // Re-bind Editor Events
   document.getElementById('qe-title').addEventListener('input', e => { quest.title = e.target.value; saveSoon(); renderQuestCanvas(); });
-  document.getElementById('qe-subtitle').addEventListener('change', e => { quest.subtitle = e.target.value; saveQuestState(); });
+  document.getElementById('qe-subtitle').addEventListener('input', e => { quest.subtitle = e.target.value; saveSoon(); });
   document.getElementById('qe-shape').addEventListener('change', e => { quest.shape = e.target.value; saveQuestState(); renderQuestCanvas(); });
-  document.getElementById('qe-x').addEventListener('change', e => { 
-    quest.x = parseFloat(e.target.value)||0; 
-    saveQuestState(); 
+  document.getElementById('qe-x').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v)) return;          // ignore half-typed values like "-" or ""
+    quest.x = v;
+    saveSoon();
     const nodeEl = document.getElementById('quest-node-' + quest.id);
     if(nodeEl) { nodeEl.style.left = (quest.x * GRID) + 'px'; }
     renderQuestEdges();
   });
-  document.getElementById('qe-y').addEventListener('change', e => { 
-    quest.y = parseFloat(e.target.value)||0; 
-    saveQuestState(); 
+  document.getElementById('qe-y').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v)) return;          // ignore half-typed values like "-" or ""
+    quest.y = v;
+    saveSoon();
     const nodeEl = document.getElementById('quest-node-' + quest.id);
     if(nodeEl) { nodeEl.style.top = (quest.y * GRID) + 'px'; }
     renderQuestEdges();
@@ -756,8 +763,8 @@ export function renderQuestEditor() {
     saveQuestState(); renderQuestEditor(); renderQuestCanvas();
   }));
 
-  document.querySelectorAll('.qe-desc-line').forEach(el => el.addEventListener('change', e => {
-    quest.description[el.dataset.index] = e.target.value; saveQuestState();
+  document.querySelectorAll('.qe-desc-line').forEach(el => el.addEventListener('input', e => {
+    quest.description[el.dataset.index] = e.target.value; saveSoon();
   }));
   document.querySelectorAll('.btn-del-desc').forEach(el => el.addEventListener('click', () => {
     quest.description.splice(el.dataset.index, 1);
@@ -772,13 +779,13 @@ export function renderQuestEditor() {
     }
   });
   
-  document.querySelectorAll('.qe-task-item').forEach(el => el.addEventListener('change', e => {
+  document.querySelectorAll('.qe-task-item').forEach(el => el.addEventListener('input', e => {
     const t = quest.tasks.find(x => x.id === el.dataset.id);
-    if(t) { t.item = e.target.value; saveQuestState(); renderQuestCanvas(); }
+    if(t) { t.item = e.target.value; saveSoon(); renderQuestCanvas(); }
   }));
-  document.querySelectorAll('.qe-task-count').forEach(el => el.addEventListener('change', e => {
+  document.querySelectorAll('.qe-task-count').forEach(el => el.addEventListener('input', e => {
     const t = quest.tasks.find(x => x.id === el.dataset.id);
-    if(t) { t.count = parseInt(e.target.value)||1; saveQuestState(); }
+    if(t) { t.count = parseInt(e.target.value)||1; saveSoon(); }
   }));
   document.querySelectorAll('.btn-del-task').forEach(el => el.addEventListener('click', () => {
     quest.tasks = quest.tasks.filter(x => x.id !== el.dataset.id);
@@ -793,13 +800,13 @@ export function renderQuestEditor() {
     }
   });
   
-  document.querySelectorAll('.qe-reward-item').forEach(el => el.addEventListener('change', e => {
+  document.querySelectorAll('.qe-reward-item').forEach(el => el.addEventListener('input', e => {
     const r = quest.rewards.find(x => x.id === el.dataset.id);
-    if(r) { r.item = e.target.value; saveQuestState(); }
+    if(r) { r.item = e.target.value; saveSoon(); }
   }));
-  document.querySelectorAll('.qe-reward-count').forEach(el => el.addEventListener('change', e => {
+  document.querySelectorAll('.qe-reward-count').forEach(el => el.addEventListener('input', e => {
     const r = quest.rewards.find(x => x.id === el.dataset.id);
-    if(r) { r.count = parseInt(e.target.value)||1; saveQuestState(); }
+    if(r) { r.count = parseInt(e.target.value)||1; saveSoon(); }
   }));
   document.querySelectorAll('.btn-del-reward').forEach(el => el.addEventListener('click', () => {
     quest.rewards = quest.rewards.filter(x => x.id !== el.dataset.id);

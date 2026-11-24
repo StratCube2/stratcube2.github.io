@@ -4,6 +4,9 @@ import {
   searchModrinth, searchCurseForge, buildModrinthMod, primaryCategory,
   isViaConnector, checkModAvailability, SEARCH_PAGE_SIZE
 } from './api.js';
+import { PROJECT_TYPES, typeOf } from './project-types.js';
+import { modsInGroup, targetGroupId, toggleGroup, renameGroup, deleteGroup, moveGroup } from './groups.js';
+import { openMoveMenu, renderGroupTools } from './groups-ui.js';
 
 const FALLBACK_ICON = 'https://docs.modrinth.com/img/logo.svg';
 
@@ -37,7 +40,7 @@ export async function executeSearch(filters, source, onPageChange) {
       ? await searchModrinth(filters, signal)
       : await searchCurseForge(filters, signal);
 
-    lastResults = { hits, source };
+    lastResults = { hits, source, type: PROJECT_TYPES[filters.type] ? filters.type : 'mod' };
     renderSearchResults();
     resultsDiv.scrollTop = 0;
     renderPagination(pagerDiv, filters.page, total, onPageChange);
@@ -57,38 +60,39 @@ export function refreshSearchResults() {
   container.scrollTop = scroll;
 }
 
-function normalizeHit(hit, source) {
+function normalizeHit(hit, source, type) {
+  const typeLabel = PROJECT_TYPES[type].singular;
   if (source === 'modrinth') {
     return {
       id: hit.project_id, slug: hit.slug, title: hit.title, desc: hit.description,
       icon: hit.icon_url, downloads: hit.downloads, follows: hit.follows,
-      category: primaryCategory(hit.categories),
-      viaConnector: isViaConnector(hit.categories)
+      category: type === 'mod' ? primaryCategory(hit.categories) : typeLabel,
+      viaConnector: type === 'mod' && isViaConnector(hit.categories)
     };
   }
   return {
     id: String(hit.id), slug: hit.slug, title: hit.name, desc: hit.summary,
     icon: hit.logo?.thumbnailUrl, downloads: hit.downloadCount, follows: null,
-    category: 'Utility', viaConnector: false
+    category: type === 'mod' ? 'Utility' : typeLabel, viaConnector: false
   };
 }
 
 function renderSearchResults() {
   const container = document.getElementById('search-results');
-  const { hits, source } = lastResults;
+  const { hits, source, type } = lastResults;
   container.innerHTML = '';
 
   if (hits.length === 0) {
-    container.innerHTML = '<span class="text-muted">No mods found for this configuration.</span>';
+    container.innerHTML = `<span class="text-muted">No ${PROJECT_TYPES[type].label.toLowerCase()} found for this configuration.</span>`;
     return;
   }
 
   const fragment = document.createDocumentFragment();
-  hits.forEach(hit => fragment.appendChild(createModCard(normalizeHit(hit, source), source)));
+  hits.forEach(hit => fragment.appendChild(createModCard(normalizeHit(hit, source, type), source, type)));
   container.appendChild(fragment);
 }
 
-function createModCard(mod, source) {
+function createModCard(mod, source, type) {
   const added = state.mods.some(m => m.id === mod.id);
   const stats = [
     `⬇ ${formatCount(mod.downloads)}`,
@@ -110,29 +114,31 @@ function createModCard(mod, source) {
 
   if (!added) {
     const btn = div.querySelector('button');
-    btn.addEventListener('click', () => addSearchedMod(mod, source, btn));
+    btn.addEventListener('click', () => addSearchedMod(mod, source, type, btn));
   }
   return div;
 }
 
-async function addSearchedMod(mod, source, btn) {
+async function addSearchedMod(mod, source, type, btn) {
   btn.textContent = 'Adding...';
   btn.disabled = true;
 
   let entry;
   if (source === 'modrinth') {
     try {
-      entry = await buildModrinthMod(mod.slug, { category: mod.category });
+      entry = await buildModrinthMod(mod.slug, { category: mod.category, type });
     } catch (e) { console.error(e); }
     // No compatible file found: still list the mod (matches previous behaviour).
-    entry ??= { id: mod.id, slug: mod.slug, title: mod.title, category: mod.category, custom: false, source, mrpackData: null };
+    entry ??= { id: mod.id, slug: mod.slug, title: mod.title, type, category: mod.category, custom: false, source, mrpackData: null };
   } else {
     entry = {
-      id: mod.id, slug: mod.slug, title: mod.title, category: mod.category,
+      id: mod.id, slug: mod.slug, title: mod.title, type, category: mod.category,
       custom: false, source, mrpackData: { isCurseForge: true }
     };
   }
 
+  const group = targetGroupId();       // the group chosen above the pack list, if any
+  if (group) entry.group = group;
   state.mods.push(entry);
   saveState();
 }
@@ -192,55 +198,118 @@ function renderPagination(container, page, total, onPageChange) {
 // ---------------------------------------------------------------------------
 
 export function renderModList() {
+  renderGroupTools();
   const container = document.getElementById('mod-list-container');
   container.innerHTML = '';
 
-  if (state.mods.length === 0) {
-    container.innerHTML = '<p class="text-muted text-xs text-center mt-2">No mods added.</p>';
+  if (state.mods.length === 0 && state.groups.length === 0) {
+    container.innerHTML = '<p class="text-muted text-xs text-center mt-2">Nothing added yet.</p>';
     return;
   }
 
-  const groups = {};
-  state.mods.forEach(mod => {
-    let c = mod.category || 'Unknown';
-    if (c.toLowerCase() === 'shaders') c = 'Shader';
-    (groups[c] ??= []).push(mod);
-  });
-
-  const shaderGroup = groups['Shader'] || [];
-  delete groups['Shader'];
-
   const fragment = document.createDocumentFragment();
-  for (const [cat, mods] of Object.entries(groups).sort()) fragment.appendChild(createCategoryDOM(cat, mods));
-  if (shaderGroup.length > 0) fragment.appendChild(createCategoryDOM('Shader', shaderGroup));
+  state.groups.forEach((group, i) => fragment.appendChild(createGroupDOM(group, i)));
+
+  const loose = modsInGroup(null);
+  if (loose.length > 0) {
+    // With no groups there is nothing to be "ungrouped" from, so the list stays plain.
+    fragment.appendChild(createSectionDOM(state.groups.length ? 'Ungrouped' : '', loose));
+  }
   container.appendChild(fragment);
 }
 
-function createCategoryDOM(categoryName, mods) {
+const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+
+function groupButton(label, title, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'grp-btn';
+  btn.textContent = label;
+  btn.title = title;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function createGroupDOM(group, index) {
+  const mods = modsInGroup(group.id);
+  const div = document.createElement('div');
+  div.className = 'mod-category mod-group' + (group.collapsed ? ' collapsed' : '');
+
+  const head = document.createElement('div');
+  head.className = 'mod-group-head';
+
+  const toggle = groupButton(group.collapsed ? '▸' : '▾', group.collapsed ? 'Expand' : 'Collapse', () => toggleGroup(group.id));
+  const name = document.createElement('span');
+  name.className = 'mod-group-name';
+  name.textContent = group.name;
+  name.title = group.name;
+  name.addEventListener('click', () => toggleGroup(group.id));
+  const count = document.createElement('span');
+  count.className = 'grp-count';
+  count.textContent = String(mods.length);
+
+  head.append(
+    toggle, name, count,
+    groupButton('✎', 'Rename group', () => {
+      const next = prompt('Rename group:', group.name);
+      if (next) renameGroup(group.id, next);
+    }),
+    groupButton('▲', 'Move group up', () => moveGroup(group.id, -1)),
+    groupButton('▼', 'Move group down', () => moveGroup(group.id, +1)),
+    groupButton('🗑', 'Delete group (its items stay in the pack)', () => {
+      const n = mods.length;
+      if (confirm(`Delete group "${group.name}"?${n ? ` Its ${n} item${n === 1 ? '' : 's'} stay in the pack as Ungrouped.` : ''}`)) deleteGroup(group.id);
+    })
+  );
+  head.querySelector('button:nth-of-type(3)').disabled = index === 0;
+  head.querySelector('button:nth-of-type(4)').disabled = index === state.groups.length - 1;
+  div.appendChild(head);
+
+  if (!group.collapsed) {
+    if (mods.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'text-muted text-xs mod-group-empty';
+      empty.textContent = 'Empty. Move items here with 📁, or pick this group above before adding.';
+      div.appendChild(empty);
+    } else {
+      mods.slice().sort(byTitle).forEach(mod => div.appendChild(createModItemDOM(mod)));
+    }
+  }
+  return div;
+}
+
+function createSectionDOM(title, mods) {
   const div = document.createElement('div');
   div.className = 'mod-category';
-
-  const title = document.createElement('div');
-  title.className = 'mod-category-title';
-  title.textContent = categoryName;
-  div.appendChild(title);
-
-  mods.forEach(mod => {
-    const badge = mod.viaConnector ? ' <span class="badge-connector">Fabric</span>' : '';
-    const item = document.createElement('div');
-    item.className = 'mod-item';
-    item.innerHTML = `
-      <span class="mod-item-name" title="${escapeHtml(mod.title)}">${mod.source === 'curseforge' ? '🔥 ' : ''}${escapeHtml(mod.title)}${badge}</span>
-      <button class="mod-item-del" title="Remove">&times;</button>
-    `;
-    item.querySelector('.mod-item-del').addEventListener('click', () => {
-      state.mods = state.mods.filter(m => m.id !== mod.id);
-      removeCustomFile(mod.id);
-      saveState();
-    });
-    div.appendChild(item);
-  });
+  if (title) {
+    const heading = document.createElement('div');
+    heading.className = 'mod-category-title';
+    heading.textContent = `${title} (${mods.length})`;
+    div.appendChild(heading);
+  }
+  mods.slice().sort(byTitle).forEach(mod => div.appendChild(createModItemDOM(mod)));
   return div;
+}
+
+function createModItemDOM(mod) {
+  const info = PROJECT_TYPES[typeOf(mod)];
+  const badge = mod.viaConnector ? ' <span class="badge-connector">Fabric</span>' : '';
+  const item = document.createElement('div');
+  item.className = 'mod-item';
+  item.innerHTML = `
+    <span class="mod-item-type" title="${info.singular}">${info.icon}</span>
+    <span class="mod-item-name" title="${escapeHtml(mod.title)}">${mod.source === 'curseforge' ? '🔥 ' : ''}${escapeHtml(mod.title)}${badge}</span>
+    <button class="mod-item-move" title="Move to group">📁</button>
+    <button class="mod-item-del" title="Remove">&times;</button>
+  `;
+  const move = item.querySelector('.mod-item-move');
+  move.addEventListener('click', () => openMoveMenu(move, mod.id));
+  item.querySelector('.mod-item-del').addEventListener('click', () => {
+    state.mods = state.mods.filter(m => m.id !== mod.id);
+    removeCustomFile(mod.id);
+    saveState();
+  });
+  return item;
 }
 
 // ---------------------------------------------------------------------------

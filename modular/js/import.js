@@ -5,6 +5,8 @@ import { newId } from './utils.js';
 import { lookupVersionsByHash, fetchProjects, primaryCategory } from './api.js';
 import { parseQuestChapters, isChapterPath, describeQuestImport } from './quest-io.js';
 import { showProgress, hideProgress } from './ui.js';
+import { PROJECT_TYPES, typeForPath } from './project-types.js';
+import { applyImportedGroups } from './groups.js';
 
 // mrpack dependency key -> loader id used by this app
 const LOADER_KEYS = { 'fabric-loader': 'fabric', 'forge': 'forge', 'quilt-loader': 'quilt', 'neoforge': 'neoforge' };
@@ -79,8 +81,8 @@ function readPackSettings(index) {
 const fileBaseName = path => path.split('/').pop().replace(/\.(jar|zip)$/i, '');
 
 function categoryForPath(path, project) {
-  if (/^shaderpacks\//i.test(path)) return 'Shader';
-  if (/^resourcepacks\//i.test(path)) return 'Resource Pack';
+  const type = typeForPath(path);
+  if (type !== 'mod') return PROJECT_TYPES[type].singular;
   return project ? primaryCategory(project.categories) : 'Unknown';
 }
 
@@ -106,13 +108,15 @@ async function resolvePackFiles(files, settings) {
     if (seen.has(id)) continue;
     seen.add(id);
 
-    const viaConnector = !!version && CONNECTOR_LOADERS.has(settings.loader)
+    const type = typeForPath(file.path);
+    const viaConnector = type === 'mod' && !!version && CONNECTOR_LOADERS.has(settings.loader)
       && version.loaders.includes('fabric') && !version.loaders.includes(settings.loader);
 
     mods.push({
       id,
       slug: project?.slug ?? fileBaseName(file.path),
       title: project?.title ?? fileBaseName(file.path),
+      type,
       category: categoryForPath(file.path, project),
       custom: false,
       source: 'modrinth',
@@ -167,6 +171,9 @@ export async function importMrPack(file) {
     clearOverrides();
     extraEntries.filter(e => !tools.claimed.has(e.name)).forEach(e => setOverride(e.name, e));
 
+    // Groups saved in the pack's index by this editor; any other pack just has none.
+    applyImportedGroups(mods, index.modular);
+
     Object.assign(state, settings, {
       mods,
       sinytraEnabled: CONNECTOR_LOADERS.has(settings.loader) && mods.some(m => m.slug === 'connector')
@@ -174,7 +181,8 @@ export async function importMrPack(file) {
     if (importedQuests) applyQuestChapters(questResult.chapters);
     saveState();
 
-    const parts = [`Imported "${settings.name}": ${mods.length} mods`];
+    const parts = [`Imported "${settings.name}": ${mods.length} items`];
+    if (state.groups.length) parts.push(`${state.groups.length} group${state.groups.length === 1 ? '' : 's'}`);
     if (jars.length) parts.push(`${jars.length} bundled jar${jars.length === 1 ? '' : 's'}`);
     if (importedQuests) parts.push(describeQuestImport(questResult));
     if (overrideCount()) parts.push(`${overrideCount()} config/other file${overrideCount() === 1 ? '' : 's'} carried over`);

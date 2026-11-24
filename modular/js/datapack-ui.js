@@ -642,7 +642,13 @@ export function render() {
 
 export function initDatapack() {
   onOverridesChange(() => { if (ui.section === 'files' && document.getElementById('tab-datapack')?.classList.contains('active')) render(); });
-  onStateChange(() => { if (ui.section === 'worldgen' && document.getElementById('tab-datapack')?.classList.contains('active')) render(); });
+  onStateChange(() => {
+    if (ui.section !== 'worldgen' || !document.getElementById('tab-datapack')?.classList.contains('active')) return;
+    // Rebuilding the panel while someone is typing in it drops focus after every keystroke.
+    const a = document.activeElement;
+    if (a && a.closest('#datapack-root') && a.matches('input, textarea, select')) return;
+    render();
+  });
   document.querySelector('.center-tab[data-target="tab-datapack"]')?.addEventListener('click', render);
   render();
 }

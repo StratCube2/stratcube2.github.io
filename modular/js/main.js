@@ -6,6 +6,7 @@ import { initDatapack } from './datapack-ui.js';
 import { fetchGameVersions, resolveDependencies, buildModrinthMod } from './api.js';
 import { renderModList, executeSearch, renderAddons, refreshAddons, refreshSearchResults, toast } from './ui.js';
 import { debounce } from './utils.js';
+import { PROJECT_TYPES, categoryLabel } from './project-types.js';
 import { initQuests, triggerQuestRenders } from './quests.js';
 import { exportMrPack, exportQuestsZip } from './export.js';
 import { importMrPack, importQuests } from './import.js';
@@ -281,6 +282,7 @@ function readFilters() {
   return {
     query: $('mod-search').value.trim(),
     page: currentPage,
+    type: $('search-type').value,
     sort: $('search-sort').value,
     categories: [...document.querySelectorAll('#search-categories input:checked')].map(i => i.value),
     environment: $('search-environment').value,
@@ -300,7 +302,13 @@ function bindSearchControls() {
 
   ['search-source', 'search-sort', 'search-environment', 'search-min-downloads', 'search-min-follows', 'search-open-source']
     .forEach(id => $(id).addEventListener('change', searchNow));
-  document.querySelectorAll('#search-categories input').forEach(i => i.addEventListener('change', search));
+  // Chips are rebuilt whenever the type changes, so listen on the container instead of each chip.
+  $('search-categories').addEventListener('change', search);
+
+  document.querySelectorAll('#search-type-tabs .type-tab').forEach(tab => {
+    tab.addEventListener('click', () => setSearchType(tab.dataset.type));
+  });
+  renderCategoryChips();
 
   $('search-source').addEventListener('change', updateSourceFilters);
 
@@ -315,6 +323,33 @@ function bindSearchControls() {
   });
 
   updateSourceFilters();
+}
+
+/** Switches what the search looks for: mods, shaders, resource packs or datapacks. */
+function setSearchType(type) {
+  if (!PROJECT_TYPES[type] || $('search-type').value === type) return;
+  $('search-type').value = type;
+  document.querySelectorAll('#search-type-tabs .type-tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+  $('mod-search').placeholder = `Search ${PROJECT_TYPES[type].label.toLowerCase()}... (Leave empty for popular)`;
+  renderCategoryChips();
+  triggerSearch();
+}
+
+/** Category filter chips differ per type (a shader has "realistic", a mod has "magic"). */
+function renderCategoryChips() {
+  const box = $('search-categories');
+  box.replaceChildren(...PROJECT_TYPES[$('search-type').value].categories.map(value => {
+    const label = document.createElement('label');
+    label.className = 'chip';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'category';
+    input.value = value;
+    const span = document.createElement('span');
+    span.textContent = categoryLabel(value);
+    label.append(input, span);
+    return label;
+  }));
 }
 
 // Category / environment / min-downloads / min-stars filters are Modrinth-only.

@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { PROJECT_TYPES, typeOf } from './project-types.js';
 
 const MODRINTH = 'https://api.modrinth.com/v2';
 const KNOWN_LOADERS = new Set(['fabric', 'forge', 'neoforge', 'quilt']);
@@ -67,11 +68,16 @@ export async function fetchGameVersions() {
   }
 }
 
-export function fetchModrinthVersionData(slugOrId) {
-  const params = new URLSearchParams({
-    loaders: JSON.stringify(getLoaders()),
-    game_versions: JSON.stringify([state.mcVersion])
-  });
+/** Loader filter for a project type: the pack's loaders for mods, "datapack" for datapacks, none otherwise. */
+function loadersFor(type) {
+  if (type === 'mod') return getLoaders();
+  return PROJECT_TYPES[type]?.loaders || null;
+}
+
+export function fetchModrinthVersionData(slugOrId, type = 'mod') {
+  const loaders = loadersFor(type);
+  const params = new URLSearchParams({ game_versions: JSON.stringify([state.mcVersion]) });
+  if (loaders) params.set('loaders', JSON.stringify(loaders));
   return cachedFetch(`${MODRINTH}/project/${slugOrId}/version?${params}`);
 }
 
@@ -86,12 +92,13 @@ export function primaryCategory(categories = []) {
   return capitalize(cat || 'utility');
 }
 
-function toMrpackData(version) {
+function toMrpackData(version, type = 'mod') {
   const file = version.files.find(f => f.primary) || version.files[0];
+  const info = PROJECT_TYPES[type] || PROJECT_TYPES.mod;
   return {
-    path: 'mods/' + file.filename,
+    path: `${info.dir}/${file.filename}`,
     hashes: { sha1: file.hashes.sha1, sha512: file.hashes.sha512 },
-    env: { client: 'required', server: 'required' },
+    env: { ...info.env },
     downloads: [file.url],
     fileSize: file.size
   };
@@ -101,8 +108,8 @@ function toMrpackData(version) {
  * Builds a mod-list entry for a Modrinth project, or null if no compatible version exists.
  * Shared by search, addons, Sinytra auto-install and the dependency resolver.
  */
-export async function buildModrinthMod(slugOrId, { category } = {}) {
-  const version = pickVersion(await fetchModrinthVersionData(slugOrId));
+export async function buildModrinthMod(slugOrId, { category, type = 'mod' } = {}) {
+  const version = pickVersion(await fetchModrinthVersionData(slugOrId, type));
   if (!version) return null;
 
   const proj = await fetchModrinthProjectData(slugOrId);
@@ -110,11 +117,12 @@ export async function buildModrinthMod(slugOrId, { category } = {}) {
     id: proj.id,
     slug: proj.slug,
     title: proj.title,
-    category: category ?? primaryCategory(proj.categories),
+    type,
+    category: category ?? (type === 'mod' ? primaryCategory(proj.categories) : PROJECT_TYPES[type].singular),
     custom: false,
     source: 'modrinth',
-    viaConnector: isViaConnector(version.loaders),
-    mrpackData: toMrpackData(version)
+    viaConnector: type === 'mod' && isViaConnector(version.loaders),
+    mrpackData: toMrpackData(version, type)
   };
 }
 
@@ -157,7 +165,8 @@ export async function fetchProjects(ids) {
 
 export async function resolveDependencies() {
   let addedCount = 0;
-  const queue = state.mods.filter(m => m.source === 'modrinth').map(m => m.id);
+  // Dependencies are only followed for mods; shaders, resource packs and datapacks are left as picked.
+  const queue = state.mods.filter(m => m.source === 'modrinth' && typeOf(m) === 'mod').map(m => m.id);
   const processed = new Set(state.mods.map(m => m.id));
 
   while (queue.length > 0) {
@@ -193,11 +202,13 @@ export async function resolveDependencies() {
 
 /**
  * Search filters (all optional except `page`):
- * { query, page, sort, categories[], environment, openSource, minDownloads, minFollows }
+ * { query, page, type, sort, categories[], environment, openSource, minDownloads, minFollows }
  */
 function buildModrinthFacets(f) {
-  const loaderFacet = getLoaders().map(l => `categories:${l}`); // OR group
-  const facets = [['project_type:mod'], [`versions:${state.mcVersion}`], loaderFacet];
+  const type = PROJECT_TYPES[f.type] ? f.type : 'mod';
+  const facets = [[`project_type:${PROJECT_TYPES[type].modrinth}`], [`versions:${state.mcVersion}`]];
+  // Only mods are tied to the pack's loader; shaders, resource packs and datapacks work with any.
+  if (type === 'mod') facets.push(getLoaders().map(l => `categories:${l}`)); // OR group
 
   (f.categories || []).forEach(c => facets.push([`categories:${c}`])); // AND between categories
 
@@ -236,15 +247,16 @@ export async function searchCurseForge(f, signal) {
     localStorage.setItem('cf_api_key', apiKey);
   }
 
+  const type = PROJECT_TYPES[f.type] ? f.type : 'mod';
   const params = new URLSearchParams({
-    gameId: 432, classId: 6, searchFilter: f.query || '',
+    gameId: 432, classId: PROJECT_TYPES[type].curseforgeClass, searchFilter: f.query || '',
     gameVersion: state.mcVersion,
-    // CurseForge can't take a loader list, so use "Any" (0) when Sinytra is on.
-    modLoaderType: isConnectorActive() ? 0 : (CF_LOADERS[state.loader] || 4),
     sortField: CF_SORT[f.sort] || 2, sortOrder: 'desc',
     index: (f.page - 1) * SEARCH_PAGE_SIZE,
     pageSize: SEARCH_PAGE_SIZE
   });
+  // CurseForge can't take a loader list, so use "Any" (0) when Sinytra is on. Only mods have loaders.
+  if (type === 'mod') params.set('modLoaderType', isConnectorActive() ? 0 : (CF_LOADERS[state.loader] || 4));
 
   const res = await fetch(`https://api.curseforge.com/v1/mods/search?${params}`, {
     signal,

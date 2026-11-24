@@ -100,24 +100,6 @@
             <div class="input-group">
               <label>Categories</label>
               <div id="search-categories" class="chip-list">
-              <label class="chip"><input type="checkbox" name="category" value="adventure"><span>Adventure</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="cursed"><span>Cursed</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="decoration"><span>Decoration</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="economy"><span>Economy</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="equipment"><span>Equipment</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="food"><span>Food</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="game-mechanics"><span>Game Mechanics</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="library"><span>Library</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="magic"><span>Magic</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="management"><span>Management</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="mobs"><span>Mobs</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="optimization"><span>Optimization</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="social"><span>Social</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="storage"><span>Storage</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="technology"><span>Technology</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="transportation"><span>Transportation</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="utility"><span>Utility</span></label>
-              <label class="chip"><input type="checkbox" name="category" value="worldgen"><span>Worldgen</span></label>
               </div>
             </div>
           </div>
@@ -249,6 +231,13 @@
       
       <div id="center-content">
         <div id="tab-search" class="tab-pane active">
+          <div id="search-type-tabs" class="type-tabs" role="tablist">
+            <button type="button" class="type-tab active" data-type="mod" role="tab">🧩 Mods</button>
+            <button type="button" class="type-tab" data-type="shader" role="tab">🌅 Shaders</button>
+            <button type="button" class="type-tab" data-type="resourcepack" role="tab">🖼️ Resource Packs</button>
+            <button type="button" class="type-tab" data-type="datapack" role="tab">📦 Datapacks</button>
+          </div>
+          <input type="hidden" id="search-type" value="mod">
           <div class="search-bar">
             <input type="text" id="mod-search" placeholder="Search mods... (Leave empty for popular)">
             <button id="btn-search" class="btn-primary">Search</button>
@@ -304,11 +293,12 @@
     <aside id="right-sidebar">
       <div id="right-mods-view" class="split-panel">
         <header class="panel-header flex-between">
-          <span>MOD LIST</span>
+          <span>PACK LIST</span>
           <button id="btn-add-custom" title="Add Custom Mod" class="icon-btn">+</button>
           <input type="file" id="custom-mod-input" multiple class="hidden">
         </header>
         
+        <div id="mod-list-tools"></div>
         <div id="mod-list-container"></div>
 
         <div class="export-box">

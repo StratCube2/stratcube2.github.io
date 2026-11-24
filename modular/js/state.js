@@ -25,6 +25,25 @@ export function normalizePackTools(raw) {
   return tools;
 }
 
+/** Fills in anything missing so older saves (which had no groups) load cleanly. */
+export function normalizeGroups(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  return raw.flatMap(g => {
+    const name = typeof g?.name === 'string' ? g.name.trim() : '';
+    if (!name || typeof g.id !== 'string' || seen.has(g.id)) return [];
+    seen.add(g.id);
+    return [{ id: g.id, name, collapsed: !!g.collapsed }];
+  });
+}
+
+/** Drops group references that point at a group that no longer exists. */
+export function reconcileGroups() {
+  const ids = new Set(state.groups.map(g => g.id));
+  state.mods.forEach(m => { if (m.group && !ids.has(m.group)) delete m.group; });
+  if (state.activeGroup && !ids.has(state.activeGroup)) state.activeGroup = null;
+}
+
 export const state = {
   name: "My Modpack",
   mcVersion: "",
@@ -33,7 +52,9 @@ export const state = {
   sinytraEnabled: false,
   mods: [],
   packTools: createPackTools(),
-  datapack: createDatapack()
+  datapack: createDatapack(),
+  groups: [],          // user-made groups for the pack list: { id, name, collapsed }
+  activeGroup: null    // group id that newly added mods go into (null = Ungrouped)
 };
 
 export let customFiles = [];
@@ -62,7 +83,8 @@ export function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     const parsed = JSON.parse(saved);
-    Object.assign(state, parsed, { mods: parsed.mods || [], packTools: normalizePackTools(parsed.packTools), datapack: normalizeDatapack(parsed.datapack) });
+    Object.assign(state, parsed, { mods: parsed.mods || [], packTools: normalizePackTools(parsed.packTools), datapack: normalizeDatapack(parsed.datapack), groups: normalizeGroups(parsed.groups) });
+    reconcileGroups();
   }
 }
 

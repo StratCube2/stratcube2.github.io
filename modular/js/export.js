@@ -3,6 +3,8 @@ import { buildQuestFiles } from './quest-io.js';
 import { writeOverrides } from './overrides.js';
 import { buildPackToolFiles } from './packtools.js';
 import { generate, hasPaxi } from './datapack-io.js';
+import { exportGroups } from './groups.js';
+import { typeOf } from './project-types.js';
 
 export async function exportQuestsZip() {
   if (!window.JSZip || !window.saveAs) return alert("Export libraries failed to load.");
@@ -21,8 +23,9 @@ export async function exportMrPack() {
   const errors = datapack.issues.filter(i => i.level === 'error');
   if (errors.length && !confirm(`${errors.length} datapack problem${errors.length === 1 ? '' : 's'} will leave things out of the export:\n\n` +
       errors.slice(0, 6).map(e => `• ${e.where}: ${e.message}`).join('\n') + '\n\nExport anyway?')) return;
-  if (datapack.usesPaxi && !hasPaxi() &&
-      !confirm('Your datapack and resource pack are loaded by Paxi, which is not in this pack. Without it they will not load in game.\n\nExport anyway?')) return;
+  const hasDatapackFiles = state.mods.some(m => typeOf(m) === 'datapack');
+  if ((datapack.usesPaxi || hasDatapackFiles) && !hasPaxi() &&
+      !confirm('Your datapacks and resource packs are loaded by Paxi, which is not in this pack. Without it they will not load in game.\n\nExport anyway?')) return;
 
   const exportButtons = document.querySelectorAll('.btn-export:not(#btn-export-quests)');
   const resetButtons = () => {
@@ -78,6 +81,10 @@ export async function exportMrPack() {
     const loaderKeyMap = { 'fabric': 'fabric-loader', 'forge': 'forge', 'quilt': 'quilt-loader', 'neoforge': 'neoforge' };
     const loaderKey = loaderKeyMap[state.loader] || state.loader;
     indexJson.dependencies[loaderKey] = loaderVersion;
+
+    // Your groups ride along in the index (launchers ignore unknown keys) so re-importing keeps them.
+    const groupData = exportGroups();
+    if (groupData) indexJson.modular = groupData;
 
     state.mods.forEach(mod => {
       if (mod.custom) {
