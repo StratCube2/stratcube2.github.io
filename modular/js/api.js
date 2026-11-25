@@ -163,11 +163,17 @@ export async function fetchProjects(ids) {
   return projects;
 }
 
-export async function resolveDependencies() {
-  let addedCount = 0;
+/**
+ * Adds the required Modrinth dependencies of pack mods (and of whatever that pulls in).
+ * @param {{ only?: string[] }} [options] start from just these project ids instead of every Modrinth mod in the pack
+ * @returns {Promise<object[]>} the mod entries that were added to the pack
+ */
+export async function resolveDependencies({ only } = {}) {
+  const added = [];
   // Dependencies are only followed for mods; shaders, resource packs and datapacks are left as picked.
-  const queue = state.mods.filter(m => m.source === 'modrinth' && typeOf(m) === 'mod').map(m => m.id);
+  const queue = only ? [...only] : state.mods.filter(m => m.source === 'modrinth' && typeOf(m) === 'mod').map(m => m.id);
   const processed = new Set(state.mods.map(m => m.id));
+  const parentTitle = new Map(state.mods.map(m => [m.id, m.title]));
 
   while (queue.length > 0) {
     const currentId = queue.shift();
@@ -185,15 +191,53 @@ export async function resolveDependencies() {
         const mod = await buildModrinthMod(dep.project_id);
         if (!mod) continue;
 
+        mod.addedAsDependencyOf = parentTitle.get(currentId) ?? null;
         state.mods.push(mod);
-        addedCount++;
+        parentTitle.set(mod.id, mod.title);
+        added.push(mod);
         queue.push(mod.id);
       }
     } catch (e) {
       console.error('Resolver error for', currentId, e);
     }
   }
-  return addedCount;
+  return added;
+}
+
+/**
+ * Finds Modrinth projects that might ship the mod with this mod id (the id from fabric.mod.json
+ * or mods.toml). Modrinth has no lookup by mod id, so this guesses from the slug and a search;
+ * the caller must confirm a candidate by reading its jar, because a slug can match an unrelated mod.
+ * @returns {Promise<string[]>} project ids, best guess first (at most `limit`)
+ */
+export async function findModrinthCandidates(modId, { limit = 3 } = {}) {
+  const ids = [];
+  const slugs = [...new Set([modId, modId.replace(/_/g, '-'), modId.replace(/-/g, '_')])];
+  for (const slug of slugs) {
+    try {
+      const proj = await fetchModrinthProjectData(slug);
+      if (proj?.project_type === 'mod' && !ids.includes(proj.id)) ids.push(proj.id);
+    } catch { /* not a slug; try the next spelling */ }
+    if (ids.length) break;
+  }
+
+  if (ids.length < limit) {
+    try {
+      const facets = [['project_type:mod'], [`versions:${state.mcVersion}`], getLoaders().map(l => `categories:${l}`)];
+      const params = new URLSearchParams({ query: modId.replace(/[_-]+/g, ' '), facets: JSON.stringify(facets), limit: 5 });
+      const res = await fetch(`${MODRINTH}/search?${params}`);
+      if (res.ok) {
+        const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const target = norm(modId);
+        const hits = (await res.json()).hits || [];
+        // Hits whose slug or title mentions the id first; Modrinth's own ranking breaks ties.
+        hits.sort((a, b) => Number(norm(b.slug).includes(target) || norm(b.title).includes(target))
+                          - Number(norm(a.slug).includes(target) || norm(a.title).includes(target)));
+        for (const h of hits) if (!ids.includes(h.project_id)) ids.push(h.project_id);
+      }
+    } catch (err) { console.warn('Modrinth search failed for', modId, err); }
+  }
+  return ids.slice(0, limit);
 }
 
 // ---------------------------------------------------------------------------

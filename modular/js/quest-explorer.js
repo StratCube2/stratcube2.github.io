@@ -4,9 +4,9 @@ import { questState, onStateChange } from './state.js';
 import { escapeHtml, debounce } from './utils.js';
 import * as db from './itemdb.js';
 import { toast } from './ui.js';
+import { exceedsDownloadWarning } from './settings.js';
 
 const PAGE = 80;                      // rows rendered at a time; more load as you scroll
-const BIG_DOWNLOAD = 150 * 1024 * 1024;
 
 const ui = {
   kind: 'item',     // 'item' | 'entity'
@@ -155,7 +155,7 @@ function pick(entries, { newQuest = false } = {}) {
 
 async function startScan() {
   const info = db.describePack();
-  if (info.downloadBytes > BIG_DOWNLOAD && !confirm(`This will download about ${formatMB(info.downloadBytes)}. Continue?`)) return;
+  if (exceedsDownloadWarning(info.downloadBytes) && !confirm(`This will download about ${formatMB(info.downloadBytes)}. Continue?`)) return;
 
   if (info.downloadCount === 0) { await db.syncRegistry({ force: true }); return; } // just retrying vanilla
 

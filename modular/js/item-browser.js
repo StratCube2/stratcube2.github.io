@@ -3,9 +3,9 @@
 import { escapeHtml, debounce } from './utils.js';
 import * as db from './itemdb.js';
 import { toast } from './ui.js';
+import { exceedsDownloadWarning } from './settings.js';
 
 const PAGE = 80;
-const BIG_DOWNLOAD = 150 * 1024 * 1024;
 const formatMB = bytes => `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
 
 let open = null; // only one browser at a time
@@ -90,7 +90,7 @@ export function openItemBrowser({ kind = 'item', title } = {}) {
 
     const startScan = async () => {
       const info = db.describePack();
-      if (info.downloadBytes > BIG_DOWNLOAD && !confirm(`This will download about ${formatMB(info.downloadBytes)}. Continue?`)) return;
+      if (exceedsDownloadWarning(info.downloadBytes) && !confirm(`This will download about ${formatMB(info.downloadBytes)}. Continue?`)) return;
       if (info.downloadCount === 0) { await db.syncRegistry({ force: true }); return; }
       ui.scanning = true; ui.abort = new AbortController(); ui.progress = { done: 0, total: info.downloadCount };
       renderScan();

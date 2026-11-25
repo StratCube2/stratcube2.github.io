@@ -519,7 +519,7 @@ function renderQuestEdges() {
 
       const sx = cx1 + cos * pullSource, sy = cy1 + sin * pullSource;
       const tx = cx2 - cos * pullTarget, ty = cy2 - sin * pullTarget;
-      edgesHtml += `<path d="M ${sx} ${sy} L ${tx} ${ty}" stroke="${isSelected ? '#6EE75A' : '#4db842'}" stroke-width="${isSelected ? 2 : 1.5}" fill="none" stroke-dasharray="${isSelected ? '6,3' : '4,3'}" marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})" opacity="0.8" />`;
+      edgesHtml += `<path d="M ${sx} ${sy} L ${tx} ${ty}" style="stroke:${isSelected ? 'var(--green)' : 'var(--green-dim)'}" stroke-width="${isSelected ? 2 : 1.5}" fill="none" stroke-dasharray="${isSelected ? '6,3' : '4,3'}" marker-end="url(#${isSelected ? 'arr-sel' : 'arr'})" opacity="0.8" />`;
     });
   });
   g.innerHTML = edgesHtml;

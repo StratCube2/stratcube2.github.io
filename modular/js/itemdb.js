@@ -262,6 +262,7 @@ async function normalizeIcon(bytes) {
 export function describePack() {
   const rows = [];
   let downloadCount = 0, downloadBytes = 0;
+  let pendingCount = 0, pendingBytes = 0; // like the above, but without mods whose download already failed
   for (const plan of planMods()) {
     const status = statuses.get(plan.mod.id);
     let stage, detail = '';
@@ -271,20 +272,44 @@ export function describePack() {
     }
     else if (!plan.key) { stage = 'skipped'; detail = plan.reason; }
     else if (cachedKeys.has(plan.key)) stage = 'ready';
-    else { stage = 'pending'; downloadCount++; downloadBytes += plan.size || 0; }
+    else { stage = 'pending'; downloadCount++; downloadBytes += plan.size || 0; pendingCount++; pendingBytes += plan.size || 0; }
     rows.push({ title: plan.mod.title, state: stage, detail });
   }
-  return { rows, downloadCount, downloadBytes, vanillaStatus };
+  return { rows, downloadCount, downloadBytes, pendingCount, pendingBytes, vanillaStatus };
+}
+
+/**
+ * Dependency metadata of every pack mod that has been scanned (cache only, no downloads).
+ * @returns {Promise<{ mod: object, key: string|null, meta: object|null }[]>} meta is null when the mod hasn't been read
+ */
+export async function getPackMeta() {
+  const out = [];
+  for (const plan of planMods()) {
+    const record = plan.key ? await cacheGet(plan.key) : null;
+    out.push({ mod: plan.mod, key: plan.key, meta: record?.meta ?? null, reason: plan.reason });
+  }
+  return out;
 }
 
 /**
  * Downloads and reads every pack mod that isn't cached yet.
- * @param {{ signal?: AbortSignal, onProgress?: (done: number, total: number) => void }} [options]
+ * @param {{ signal?: AbortSignal, onProgress?: (done: number, total: number) => void, skipFailed?: boolean }} [options]
+ *   `skipFailed` leaves out mods whose last download failed (an automatic scan shouldn't keep retrying them).
  */
-export async function scanPackMods({ signal, onProgress } = {}) {
+export function scanPackMods(options = {}) {
+  // One scan at a time: a second caller (auto-scan, the dependency check, the item browser) waits its turn
+  // and then only reads what is still missing, so no jar is downloaded twice.
+  const run = scanQueue.then(() => scanPackModsNow(options));
+  scanQueue = run.catch(() => {});
+  return run;
+}
+let scanQueue = Promise.resolve();
+
+async function scanPackModsNow({ signal, onProgress, skipFailed = false } = {}) {
   if (!window.JSZip) throw new Error('JSZip failed to load, so mods cannot be read.');
 
-  const todo = planMods().filter(p => p.key && !cachedKeys.has(p.key));
+  const todo = planMods().filter(p => p.key && !cachedKeys.has(p.key)
+    && !(skipFailed && statuses.get(p.mod.id)?.state === 'failed'));
   let done = 0, next = 0;
   onProgress?.(0, todo.length);
 
@@ -300,7 +325,7 @@ export async function scanPackMods({ signal, onProgress } = {}) {
           if (!res.ok) throw new Error(`download failed (${res.status})`);
           blob = await res.blob();
         }
-        const scan = await scanJar(await JSZip.loadAsync(blob), { normalizeIcon });
+        const scan = await scanJar(await JSZip.loadAsync(blob), { normalizeIcon, jszip: JSZip });
         await cachePut({ key: plan.key, v: SCAN_VERSION, title: plan.mod.title, ...scan, at: Date.now() });
         cachedKeys.add(plan.key);
         statuses.delete(plan.mod.id);

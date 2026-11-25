@@ -7,8 +7,10 @@
 //   - assets/<ns>/textures/{item,block}/...  icon images
 // No DOM or browser APIs are used here (icon resizing is injected), so it can run under Node.
 import { parseJson5 } from './packtools.js';
+import { readJarMeta, slimMeta } from './depmeta.js';
 
-export const SCAN_VERSION = 1;
+// Bumped to 2 when jars also started reporting their dependency metadata (`meta`).
+export const SCAN_VERSION = 2;
 
 const MAX_ICON_BYTES = 200 * 1024;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
@@ -46,10 +48,11 @@ function findModelRef(node, depth = 0) {
 
 /**
  * @param {import('jszip')} zip
- * @param {{ normalizeIcon?: (bytes: Uint8Array) => Promise<Uint8Array|null> }} [options]
- * @returns {Promise<{ namespaces: Record<string, { items: {id:string,name:string,icon:string|null}[], entities: {id:string,name:string}[] }>, icons: Record<string, Uint8Array> }>}
+ * @param {{ normalizeIcon?: (bytes: Uint8Array) => Promise<Uint8Array|null>, jszip?: { loadAsync: Function } }} [options]
+ *   `jszip` lets nested (jar-in-jar) mods be read for the dependency check.
+ * @returns {Promise<{ meta: object|null, namespaces: Record<string, { items: {id:string,name:string,icon:string|null}[], entities: {id:string,name:string}[] }>, icons: Record<string, Uint8Array> }>}
  */
-export async function scanJar(zip, { normalizeIcon } = {}) {
+export async function scanJar(zip, { normalizeIcon, jszip } = {}) {
   // --- 1. Index the file list by namespace -------------------------------------------------
   const perNs = new Map();
   const names = new Set();
@@ -102,7 +105,9 @@ export async function scanJar(zip, { normalizeIcon } = {}) {
   }
 
   // --- 2. Per namespace: names, item ids, icons ---------------------------------------------
-  const out = { namespaces: {}, icons: {} };
+  let meta = null;
+  try { meta = slimMeta(await readJarMeta(zip, { jszip })); } catch (err) { console.warn('Could not read mod metadata', err); }
+  const out = { meta, namespaces: {}, icons: {} };
   const iconPaths = new Map(); // zip path -> icon key (null if unusable); shared by items using the same texture
 
   async function loadIcon(zipPath) {

@@ -1,9 +1,9 @@
 import { state, saveState, removeCustomFile } from './state.js';
 import { escapeHtml } from './utils.js';
+import { getSetting } from './settings.js';
 import {
   searchModrinth, searchCurseForge, buildModrinthMod, primaryCategory,
-  isViaConnector, checkModAvailability, SEARCH_PAGE_SIZE
-} from './api.js';
+  isViaConnector, checkModAvailability, SEARCH_PAGE_SIZE, resolveDependencies } from './api.js';
 import { PROJECT_TYPES, typeOf } from './project-types.js';
 import { modsInGroup, targetGroupId, toggleGroup, renameGroup, deleteGroup, moveGroup } from './groups.js';
 import { openMoveMenu, renderGroupTools } from './groups-ui.js';
@@ -141,6 +141,17 @@ async function addSearchedMod(mod, source, type, btn) {
   if (group) entry.group = group;
   state.mods.push(entry);
   saveState();
+
+  // Pull in the mod's required Modrinth dependencies, if the pack has that turned on.
+  if (getSetting('autoDependencies') && source === 'modrinth' && type === 'mod' && entry.mrpackData) {
+    try {
+      const deps = await resolveDependencies({ only: [entry.id] });
+      if (deps.length) {
+        saveState();
+        toast(`Added ${deps.length} dependenc${deps.length === 1 ? 'y' : 'ies'} for ${entry.title}: ${deps.map(d => d.title).join(', ')}`);
+      }
+    } catch (err) { console.warn('Auto-adding dependencies failed', err); }
+  }
 }
 
 // ---------------------------------------------------------------------------

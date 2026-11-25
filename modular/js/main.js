@@ -3,7 +3,7 @@ import { hydrateOverrides } from './overrides.js';
 import { requestPersistence } from './storage.js';
 import { hydrateTextures } from './datapack-io.js';
 import { initDatapack } from './datapack-ui.js';
-import { fetchGameVersions, resolveDependencies, buildModrinthMod } from './api.js';
+import { fetchGameVersions, buildModrinthMod } from './api.js';
 import { renderModList, executeSearch, renderAddons, refreshAddons, refreshSearchResults, toast } from './ui.js';
 import { debounce } from './utils.js';
 import { PROJECT_TYPES, categoryLabel } from './project-types.js';
@@ -11,8 +11,13 @@ import { initQuests, triggerQuestRenders } from './quests.js';
 import { exportMrPack, exportQuestsZip } from './export.js';
 import { importMrPack, importQuests } from './import.js';
 import { initPackTools, renderPackTools } from './packtools-ui.js';
+import { initDependencyPanel } from './depcheck-ui.js';
+import { loadSettings } from './settings.js';
+import { initSettingsPanel } from './settings-ui.js';
+import { initAutoScan } from './autoscan.js';
 
 document.addEventListener("DOMContentLoaded", async () => {
+  loadSettings();
   loadState();
   loadQuestState();
   // Imported files, custom jars and item textures saved by earlier sessions (IndexedDB).
@@ -92,18 +97,10 @@ function bindFormInputs() {
 
   bindSearchControls();
 
-  // Auto-Dependency Button
-  document.getElementById('btn-auto-dep').addEventListener('click', async (e) => {
-    const btn = e.target;
-    btn.textContent = "Resolving...";
-    btn.disabled = true;
-    
-    const addedCount = await resolveDependencies();
-    btn.textContent = addedCount > 0 ? `Added ${addedCount} mods` : "All good!";
-    
-    if (addedCount > 0) saveState();
-    setTimeout(() => { btn.textContent = "Resolve Dependencies"; btn.disabled = false; }, 3000);
-  });
+  // Dependency check / resolve buttons and the auto-add toggle
+  initDependencyPanel();
+  initSettingsPanel();
+  initAutoScan(); // does nothing unless "Scan mod files automatically" is on in Settings
 
   // Custom Mod Upload
   document.getElementById('btn-add-custom').addEventListener('click', () => document.getElementById('custom-mod-input').click());
