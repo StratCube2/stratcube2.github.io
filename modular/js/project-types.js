@@ -8,25 +8,25 @@ const MOD_CATEGORIES = [
 
 export const PROJECT_TYPES = {
   mod: {
-    label: 'Mods', singular: 'Mod', icon: '🧩', modrinth: 'mod', curseforgeClass: 6,
+    label: 'Mods', singular: 'Mod', icon: 'puzzle', modrinth: 'mod', curseforgeClass: 6,
     dir: 'mods', env: { client: 'required', server: 'required' }, usesLoader: true,
     categories: MOD_CATEGORIES
   },
   shader: {
-    label: 'Shaders', singular: 'Shader', icon: '🌅', modrinth: 'shader', curseforgeClass: 6552,
+    label: 'Shaders', singular: 'Shader', icon: 'sunrise', modrinth: 'shader', curseforgeClass: 6552,
     dir: 'shaderpacks', env: { client: 'required', server: 'unsupported' }, usesLoader: false,
     categories: ['fantasy', 'realistic', 'semi-realistic', 'vanilla-like', 'cartoon', 'cursed', 'atmosphere', 'bloom',
       'colored-lighting', 'foliage', 'path-tracing', 'pbr', 'reflections', 'shadows', 'potato', 'low', 'medium', 'high']
   },
   resourcepack: {
-    label: 'Resource Packs', singular: 'Resource Pack', icon: '🖼️', modrinth: 'resourcepack', curseforgeClass: 12,
+    label: 'Resource Packs', singular: 'Resource Pack', icon: 'image', modrinth: 'resourcepack', curseforgeClass: 12,
     dir: 'resourcepacks', env: { client: 'required', server: 'unsupported' }, usesLoader: false,
     categories: ['audio', 'blocks', 'combat', 'core-shaders', 'cursed', 'decoration', 'entities', 'environment',
       'equipment', 'fonts', 'gui', 'items', 'locale', 'modded', 'models', 'realistic', 'simplistic', 'themed',
       'tweaks', 'utility', 'vanilla-like']
   },
   datapack: {
-    label: 'Datapacks', singular: 'Datapack', icon: '📦', modrinth: 'datapack', curseforgeClass: 6945,
+    label: 'Datapacks', singular: 'Datapack', icon: 'package', modrinth: 'datapack', curseforgeClass: 6945,
     // Datapacks are loaded through Paxi, the same way the Datapack tab's own output is.
     dir: 'config/paxi/datapacks', env: { client: 'required', server: 'required' }, usesLoader: false,
     loaders: ['datapack'],

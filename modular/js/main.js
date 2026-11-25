@@ -15,8 +15,10 @@ import { initDependencyPanel } from './depcheck-ui.js';
 import { loadSettings } from './settings.js';
 import { initSettingsPanel } from './settings-ui.js';
 import { initAutoScan } from './autoscan.js';
+import { hydrateIcons } from './icons.js';
 
 document.addEventListener("DOMContentLoaded", async () => {
+  hydrateIcons();
   loadSettings();
   loadState();
   loadQuestState();

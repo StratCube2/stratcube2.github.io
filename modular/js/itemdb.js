@@ -5,6 +5,7 @@
 import { state, customFiles } from './state.js';
 import { escapeHtml } from './utils.js';
 import { scanJar, SCAN_VERSION, prettifyId, pngSize } from './jarscan.js';
+import { icon as svgIcon } from './icons.js';
 
 const MCMETA = 'https://raw.githubusercontent.com/misode/mcmeta';
 const DB_NAME = 'modpackgen_items';
@@ -384,7 +385,7 @@ function vanillaIconUrls(entry) {
 /** HTML for an item's icon. Safe to put in innerHTML. Missing textures degrade to a blank tile (see installIconFallback). */
 export function iconHtml(entry, size = 24) {
   const dims = `width="${size}" height="${size}"`;
-  if (entry?.kind === 'entity') return `<span class="item-icon ph" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.6)}px">⚔</span>`;
+  if (entry?.kind === 'entity') return `<span class="item-icon ph" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.6)}px">${svgIcon('sword', Math.round(size * 0.6))}</span>`;
   let src = entry?.iconUrl ?? null, fallbacks = [];
   if (entry?.vanilla && registry.assetsRef) [src, ...fallbacks] = vanillaIconUrls(entry);
   if (!src) return `<span class="item-icon ph" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.5)}px">${escapeHtml((entry?.name ?? '?').charAt(0).toUpperCase())}</span>`;

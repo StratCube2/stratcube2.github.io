@@ -3,6 +3,7 @@ import { newId, escapeHtml, debounce, TASK_ICONS } from './utils.js';
 import { initExplorer, renderTarget } from './quest-explorer.js';
 import { getEntry, displayName, iconHtml, onRegistryChange } from './itemdb.js';
 import { toast } from './ui.js';
+import { icon as svgIcon } from './icons.js';
 
 const GRID = 80;                       // px per quest-map unit
 const NODE_W = 150, NODE_H = 70;       // default rectangular node size
@@ -449,7 +450,7 @@ export function renderQuestChapters() {
 
     if (active) {
       const edit = document.createElement('span');
-      edit.className = 'qc-chapter-act'; edit.title = 'Rename chapter'; edit.textContent = '✎';
+      edit.className = 'qc-chapter-act'; edit.title = 'Rename chapter'; edit.innerHTML = svgIcon('pencil');
       edit.addEventListener('click', e => { e.stopPropagation(); renameChapter(ch); });
       btn.appendChild(edit);
     }
@@ -537,7 +538,7 @@ function nodeHtml(quest) {
   if (quest.tasks.length === 0) taskHtml += `<span class="qn-none">no tasks</span>`;
 
   const shaped = isShaped(quest);
-  const depsText = shaped ? `⬅ ${quest.dependencies.length}` : `⬅ ${quest.dependencies.length} dep(s)`;
+  const depsText = shaped ? `${svgIcon('arrow-left')} ${quest.dependencies.length}` : `${svgIcon('arrow-left')} ${quest.dependencies.length} dep(s)`;
   const inner = `
     <div class="qn-title" title="${escapeHtml(quest.title || 'Untitled')}">${escapeHtml(quest.title || 'Untitled')}</div>
     <div class="qn-tasks">${taskHtml}</div>
@@ -559,7 +560,7 @@ function updateStatus() {
   $('qs-count').textContent = `${chapter ? chapter.quests.length : 0} quests`;
   const link = $('qs-link');
   link.classList.toggle('hidden', !questState.linkSource);
-  link.textContent = '🔗 Tap the quest that needs this one first';
+  link.innerHTML = `${svgIcon('link')} Tap the quest that needs this one first`;
 }
 
 export function renderQuestCanvas() {

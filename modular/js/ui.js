@@ -7,6 +7,7 @@ import {
 import { PROJECT_TYPES, typeOf } from './project-types.js';
 import { modsInGroup, targetGroupId, toggleGroup, renameGroup, deleteGroup, moveGroup } from './groups.js';
 import { openMoveMenu, renderGroupTools } from './groups-ui.js';
+import { icon as svgIcon } from './icons.js';
 
 const FALLBACK_ICON = 'https://docs.modrinth.com/img/logo.svg';
 
@@ -95,8 +96,8 @@ function renderSearchResults() {
 function createModCard(mod, source, type) {
   const added = state.mods.some(m => m.id === mod.id);
   const stats = [
-    `⬇ ${formatCount(mod.downloads)}`,
-    mod.follows != null ? `★ ${formatCount(mod.follows)}` : null,
+    `${svgIcon('download')} ${formatCount(mod.downloads)}`,
+    mod.follows != null ? `${svgIcon('star')} ${formatCount(mod.follows)}` : null,
     mod.viaConnector ? '<span class="badge-connector" title="Fabric mod, runs through Sinytra Connector">Fabric via Connector</span>' : null
   ].filter(Boolean).join(' · ');
 
@@ -235,7 +236,7 @@ function groupButton(label, title, onClick) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'grp-btn';
-  btn.textContent = label;
+  if (label.startsWith('<svg')) btn.innerHTML = label; else btn.textContent = label;
   btn.title = title;
   btn.addEventListener('click', onClick);
   return btn;
@@ -261,13 +262,13 @@ function createGroupDOM(group, index) {
 
   head.append(
     toggle, name, count,
-    groupButton('✎', 'Rename group', () => {
+    groupButton(svgIcon('pencil'), 'Rename group', () => {
       const next = prompt('Rename group:', group.name);
       if (next) renameGroup(group.id, next);
     }),
     groupButton('▲', 'Move group up', () => moveGroup(group.id, -1)),
     groupButton('▼', 'Move group down', () => moveGroup(group.id, +1)),
-    groupButton('🗑', 'Delete group (its items stay in the pack)', () => {
+    groupButton(svgIcon('trash'), 'Delete group (its items stay in the pack)', () => {
       const n = mods.length;
       if (confirm(`Delete group "${group.name}"?${n ? ` Its ${n} item${n === 1 ? '' : 's'} stay in the pack as Ungrouped.` : ''}`)) deleteGroup(group.id);
     })
@@ -280,7 +281,7 @@ function createGroupDOM(group, index) {
     if (mods.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'text-muted text-xs mod-group-empty';
-      empty.textContent = 'Empty. Move items here with 📁, or pick this group above before adding.';
+      empty.textContent = 'Empty. Move items here with the folder button, or pick this group above before adding.';
       div.appendChild(empty);
     } else {
       mods.slice().sort(byTitle).forEach(mod => div.appendChild(createModItemDOM(mod)));
@@ -308,9 +309,9 @@ function createModItemDOM(mod) {
   const item = document.createElement('div');
   item.className = 'mod-item';
   item.innerHTML = `
-    <span class="mod-item-type" title="${info.singular}">${info.icon}</span>
-    <span class="mod-item-name" title="${escapeHtml(mod.title)}">${mod.source === 'curseforge' ? '🔥 ' : ''}${escapeHtml(mod.title)}${badge}</span>
-    <button class="mod-item-move" title="Move to group">📁</button>
+    <span class="mod-item-type" title="${info.singular}">${svgIcon(info.icon)}</span>
+    <span class="mod-item-name" title="${escapeHtml(mod.title)}">${mod.source === 'curseforge' ? svgIcon('flame') + ' ' : ''}${escapeHtml(mod.title)}${badge}</span>
+    <button class="mod-item-move" title="Move to group">${svgIcon('folder')}</button>
     <button class="mod-item-del" title="Remove">&times;</button>
   `;
   const move = item.querySelector('.mod-item-move');

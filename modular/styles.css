@@ -503,6 +503,10 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 .qc-chapter-act { font-size: 14px; font-weight: 700; padding: 0 4px; line-height: 1; }
 .qc-chapter-act.danger { color: #ff4466; }
 .qc-chapter.active .qc-chapter-act.danger { color: #a00; }
+.svg-icon { vertical-align: -0.15em; flex-shrink: 0; }
+.mod-stats .svg-icon { width: 0.95em; height: 0.95em; }
+.grp-btn .svg-icon, .mod-item-move .svg-icon { width: 1.1em; height: 1.1em; }
+#quest-empty .svg-icon { width: 1em; height: 1em; opacity: 0.6; }
 
 /* ---- Datapack editor ---- */
 .dp-content { container-type: inline-size; }

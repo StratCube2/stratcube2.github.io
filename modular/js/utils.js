@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 // Secure, collision-resistant ID generation
 export function newId() {
   if (window.crypto && crypto.randomUUID) {
@@ -57,4 +58,4 @@ export function toSNBT(val, depth = 0) {
   return String(val);
 }
 
-export const TASK_ICONS = { collect: '📦', craft: '⚒️', explore: '🗺️', kill: '⚔️', use: '🤲', checkmark: '✅' };
+export const TASK_ICONS = { collect: icon('package'), craft: icon('hammer'), explore: icon('map'), kill: icon('sword'), use: icon('hand'), checkmark: icon('check-circle') };

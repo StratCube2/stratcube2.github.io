@@ -13,6 +13,7 @@ import {
 } from './datapack.js';
 import { generate, hasPaxi, textureCache, saveTexture, removeTexture, renameTexture, isPng } from './datapack-io.js';
 import { listOverrides, removeOverride, overrideSize, readOverrideText, onOverridesChange } from './overrides.js';
+import { icon as svgIcon } from './icons.js';
 
 const SECTIONS = [
   ['recipes', 'Recipes'], ['items', 'Custom items'], ['tags', 'Tags'], ['loot', 'Loot tables'],
@@ -400,9 +401,9 @@ function modOptionCard(m) {
   const paintMeta = proj => {
     if (proj?.icon_url) icon.src = proj.icon_url;
     const parts = [];
-    if (proj) parts.push(`⬇ ${formatCount(proj.downloads)}`, `★ ${formatCount(proj.followers)}`);
-    if (m.note) parts.push(m.note);
-    stats.textContent = parts.join(' · ');
+    if (proj) parts.push(`${svgIcon('download')} ${formatCount(proj.downloads)}`, `${svgIcon('star')} ${formatCount(proj.followers)}`);
+    if (m.note) parts.push(escapeHtml(m.note));
+    stats.innerHTML = parts.join(' · ');
   };
 
   paintMeta(getModMeta(m.slug, paintMeta));

@@ -265,21 +265,21 @@
           <div id="quest-topbar" style="display:flex; align-items:center; gap:8px; padding:8px; background:var(--panel-bg); border-bottom:1px solid var(--border); flex-shrink:0; overflow-x:auto;">
             <div id="quest-chapters-list" style="display:flex; gap:4px; flex:1;"></div>
             <button id="btn-add-chapter" class="btn-primary" style="padding:4px 8px;">+ Chapter</button>
-            <button id="btn-layout-quests" class="btn-primary" style="padding:4px 8px;">⊞ Layout</button>
+            <button id="btn-layout-quests" class="btn-primary" style="padding:4px 8px;"><i class="ico" data-icon="grid"></i> Layout</button>
             <button id="btn-add-quest" class="btn-primary" style="padding:4px 8px;">+ Quest</button>
-            <button id="btn-import-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;">⬆ Import Quests</button>
+            <button id="btn-import-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;"><i class="ico" data-icon="upload"></i> Import Quests</button>
             <input type="file" id="quests-input" accept=".zip,.mrpack,.snbt" multiple class="hidden">
-            <button id="btn-export-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;">⬇ Export Quests</button>
+            <button id="btn-export-quests" class="btn-export" style="padding:4px 8px; width:auto; border-radius:4px;"><i class="ico" data-icon="download"></i> Export Quests</button>
           </div>
           
           <div id="quest-canvas-container">
             <div style="position:absolute; top:8px; right:8px; z-index:10; display:flex; gap:6px; pointer-events:none;" id="quest-status-bar"></div>
-            <div id="quest-empty" class="hidden"><div style="font-size:40px;">📜</div><div>No quests in this chapter.<br>Tap <b>+ Quest</b> to add one.</div></div>
+            <div id="quest-empty" class="hidden"><div style="font-size:40px;"><i class="ico" data-icon="scroll"></i></div><div>No quests in this chapter.<br>Tap <b>+ Quest</b> to add one.</div></div>
             <div style="position:absolute; top:8px; left:8px; z-index:10; display:flex; gap:4px;">
               <button class="btn-primary" id="btn-zoom-in" style="padding:2px 8px;">+</button>
               <button class="btn-primary" id="btn-zoom-out" style="padding:2px 8px;">-</button>
-              <button class="btn-primary" id="btn-zoom-reset" title="Reset zoom" style="padding:2px 8px;">⟳</button>
-              <button class="btn-primary" id="btn-zoom-fit" title="Fit all quests" style="padding:2px 8px;">⤢</button>
+              <button class="btn-primary" id="btn-zoom-reset" title="Reset zoom" style="padding:2px 8px;"><i class="ico" data-icon="refresh"></i></button>
+              <button class="btn-primary" id="btn-zoom-fit" title="Fit all quests" style="padding:2px 8px;"><i class="ico" data-icon="maximize"></i></button>
             </div>
             
             <div id="quest-canvas-inner" style="transform-origin: 0 0; position:relative; width:4000px; height:4000px;">
@@ -323,8 +323,8 @@
         <header class="panel-header flex-between">
           <span>QUEST EDITOR</span>
           <div style="display:flex; gap:8px;">
-            <button id="btn-link-dep" title="Link Dependency" class="icon-btn" style="font-size:14px;">🔗</button>
-            <button id="btn-del-quest" title="Delete Quest" class="icon-btn" style="color:#ff4466; font-size:14px;">🗑</button>
+            <button id="btn-link-dep" title="Link Dependency" class="icon-btn" style="font-size:14px;"><i class="ico" data-icon="link"></i></button>
+            <button id="btn-del-quest" title="Delete Quest" class="icon-btn" style="color:#ff4466; font-size:14px;"><i class="ico" data-icon="trash"></i></button>
           </div>
         </header>
         <div id="quest-editor-container" style="flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column;">
